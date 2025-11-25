@@ -2,12 +2,11 @@
 Unit tests for format registry.
 
 Tests cover:
-- Adapter registration
+- Adapter registration and unregistration
 - Adapter lookup
-- Format detection
+- Format detection from file paths
 - Config type support queries
-
-Status: STUB - To be implemented
+- Error handling for edge cases
 """
 
 import pytest
@@ -31,63 +30,125 @@ class TestFormatRegistry:
 
     def test_register_adapter(self):
         """Test registering an adapter."""
-        # TODO: Implement
-        # registry = FormatRegistry()
-        # adapter = ClaudeAdapter()
-        # registry.register(adapter)
-        # assert 'claude' in registry.list_formats()
-        pass
+        registry = FormatRegistry()
+        adapter = ClaudeAdapter()
+        registry.register(adapter)
+        assert 'claude' in registry.list_formats()
+        assert registry.get_adapter('claude') is not None
 
     def test_register_duplicate_raises_error(self, registry):
         """Test that registering duplicate format raises error."""
-        # TODO: Implement
-        # with pytest.raises(ValueError):
-        #     registry.register(ClaudeAdapter())
-        pass
+        with pytest.raises(ValueError, match="already registered"):
+            registry.register(ClaudeAdapter())
 
     def test_get_adapter(self, registry):
         """Test retrieving adapter by name."""
-        # TODO: Implement
-        # adapter = registry.get_adapter('claude')
-        # assert adapter is not None
-        # assert adapter.format_name == 'claude'
-        pass
+        adapter = registry.get_adapter('claude')
+        assert adapter is not None
+        assert adapter.format_name == 'claude'
+
+        adapter = registry.get_adapter('copilot')
+        assert adapter is not None
+        assert adapter.format_name == 'copilot'
 
     def test_get_nonexistent_adapter(self, registry):
         """Test retrieving non-existent adapter returns None."""
-        # TODO: Implement
-        # assert registry.get_adapter('nonexistent') is None
-        pass
+        assert registry.get_adapter('nonexistent') is None
+        assert registry.get_adapter('unknown-format') is None
 
     def test_detect_format(self, registry):
         """Test auto-detecting format from file path."""
-        # TODO: Implement
-        # adapter = registry.detect_format(Path('agent.md'))
-        # assert adapter.format_name == 'claude'
-        #
-        # adapter = registry.detect_format(Path('agent.agent.md'))
-        # assert adapter.format_name == 'copilot'
-        pass
+        # Claude agent - plain .md file
+        adapter = registry.detect_format(Path('agent.md'))
+        assert adapter is not None
+        assert adapter.format_name == 'claude'
+
+        adapter = registry.detect_format(Path('~/.claude/agents/planner.md'))
+        assert adapter is not None
+        assert adapter.format_name == 'claude'
+
+        # Copilot agent - .agent.md file
+        adapter = registry.detect_format(Path('agent.agent.md'))
+        assert adapter is not None
+        assert adapter.format_name == 'copilot'
+
+        adapter = registry.detect_format(Path('.github/agents/reviewer.agent.md'))
+        assert adapter is not None
+        assert adapter.format_name == 'copilot'
+
+    def test_detect_format_no_match(self, registry):
+        """Test that detecting unknown format returns None."""
+        # File extensions that don't match any adapter
+        assert registry.detect_format(Path('file.txt')) is None
+        assert registry.detect_format(Path('script.py')) is None
+        assert registry.detect_format(Path('config.json')) is None
 
     def test_list_formats(self, registry):
         """Test listing all registered formats."""
-        # TODO: Implement
-        # formats = registry.list_formats()
-        # assert 'claude' in formats
-        # assert 'copilot' in formats
-        pass
+        formats = registry.list_formats()
+        assert 'claude' in formats
+        assert 'copilot' in formats
+        assert len(formats) == 2
+
+    def test_list_formats_empty(self):
+        """Test listing formats for empty registry."""
+        registry = FormatRegistry()
+        assert registry.list_formats() == []
 
     def test_supports_config_type(self, registry):
         """Test checking if format supports config type."""
-        # TODO: Implement
-        # assert registry.supports_config_type('claude', ConfigType.AGENT)
-        # assert not registry.supports_config_type('copilot', ConfigType.PERMISSION)
-        pass
+        # Both support AGENT config type
+        assert registry.supports_config_type('claude', ConfigType.AGENT)
+        assert registry.supports_config_type('copilot', ConfigType.AGENT)
+
+        # Neither supports PERMISSION or PROMPT yet (not implemented)
+        assert not registry.supports_config_type('claude', ConfigType.PERMISSION)
+        assert not registry.supports_config_type('copilot', ConfigType.PERMISSION)
+        assert not registry.supports_config_type('claude', ConfigType.PROMPT)
+        assert not registry.supports_config_type('copilot', ConfigType.PROMPT)
+
+    def test_supports_config_type_nonexistent(self, registry):
+        """Test checking support for non-existent format returns False."""
+        assert not registry.supports_config_type('unknown', ConfigType.AGENT)
+        assert not registry.supports_config_type('nonexistent', ConfigType.PERMISSION)
 
     def test_get_formats_supporting(self, registry):
         """Test getting all formats supporting a config type."""
-        # TODO: Implement
-        # formats = registry.get_formats_supporting(ConfigType.AGENT)
-        # assert 'claude' in formats
-        # assert 'copilot' in formats
-        pass
+        # Both adapters support AGENT
+        formats = registry.get_formats_supporting(ConfigType.AGENT)
+        assert 'claude' in formats
+        assert 'copilot' in formats
+        assert len(formats) == 2
+
+        # No adapters support PERMISSION or PROMPT yet
+        formats = registry.get_formats_supporting(ConfigType.PERMISSION)
+        assert len(formats) == 0
+
+        formats = registry.get_formats_supporting(ConfigType.PROMPT)
+        assert len(formats) == 0
+
+    def test_unregister_adapter(self, registry):
+        """Test unregistering an adapter."""
+        # Verify claude is registered
+        assert 'claude' in registry.list_formats()
+        assert registry.get_adapter('claude') is not None
+
+        # Unregister it
+        registry.unregister('claude')
+
+        # Verify it's gone
+        assert 'claude' not in registry.list_formats()
+        assert registry.get_adapter('claude') is None
+
+        # copilot should still be there
+        assert 'copilot' in registry.list_formats()
+
+    def test_unregister_nonexistent(self, registry):
+        """Test unregistering non-existent format doesn't raise error."""
+        # Should not raise any exception
+        registry.unregister('nonexistent')
+        registry.unregister('unknown-format')
+
+        # Existing formats should still be there
+        assert 'claude' in registry.list_formats()
+        assert 'copilot' in registry.list_formats()
