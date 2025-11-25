@@ -54,7 +54,6 @@ Each AI tool implements this interface once. Benefits:
 - Uniform interface for all formats
 - Easy to add new formats
 - Testable in isolation
-- Plugin-compatible
 
 ### 3. Format Registry (`core/registry.py`)
 
@@ -63,7 +62,6 @@ Central directory of available adapters:
 - Registers adapters by name
 - Auto-detects format from file paths
 - Validates format support for config types
-- Enables plugin architecture
 
 ### 4. Sync Orchestrator (`core/orchestrator.py`)
 
@@ -159,16 +157,6 @@ Each adapter handles:
 - File: `.continue/config.yaml`
 - Structure: Multi-model configuration
 
-## Plugin System
-
-Third-party developers can add format support without modifying core code:
-
-1. Create adapter implementing `FormatAdapter` interface
-2. Place in `plugins/` directory
-3. Register with `FormatRegistry`
-
-See `plugins/README.md` for development guide.
-
 ## Information Preservation
 
 ### Lossless Round-Trips
@@ -254,7 +242,6 @@ See `tests/` directory for test structure.
 - Implement Codex, Windsurf, Cursor adapters
 - Add permission sync
 - Add prompt sync
-- Plugin discovery system
 
 ### Phase 4: Advanced Features
 - N-way sync (sync between 3+ formats simultaneously)

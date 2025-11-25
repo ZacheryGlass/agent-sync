@@ -7,8 +7,7 @@ The registry acts as a central directory of all format adapters, providing:
 - Validation of format support for config types
 - Discovery of available formats
 
-This enables plugin-style architecture where adapters can be dynamically
-registered without modifying core code.
+Adapters can be dynamically registered without modifying core code.
 """
 
 from typing import Dict, List, Optional

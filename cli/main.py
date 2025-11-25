@@ -156,15 +156,13 @@ def setup_registry() -> FormatRegistry:
     """
     registry = FormatRegistry()
 
-    # Register built-in adapters
+    # Register adapters
     registry.register(ClaudeAdapter())
     registry.register(CopilotAdapter())
     # Note: Cursor, Windsurf, Continue are stubs - will raise NotImplementedError
     registry.register(CursorAdapter())
     registry.register(WindsurfAdapter())
     registry.register(ContinueAdapter())
-
-    # TODO: Auto-discover and register plugins from plugins/ directory
 
     return registry
 
