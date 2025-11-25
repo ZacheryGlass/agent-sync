@@ -211,32 +211,6 @@ Complexity: O(1) - only need to implement 2 methods (to/from canonical)
 
 See `tests/` directory for test structure.
 
-## Migration Path
-
-### Phase 1: Refactor (Current)
-- ✅ Extract canonical models
-- ✅ Create adapter interface
-- ✅ Implement Claude/Copilot adapters
-- ✅ Setup registry and state manager
-- 🔄 Implement universal orchestrator
-- 🔄 Create test suite
-
-### Phase 2: Backward Compatibility
-- Create wrapper matching old CLI
-- Test equivalence with legacy implementation
-- Deprecate `sync_custom_agents.py`
-
-### Phase 3: New Features
-- Add new format adapters as needed (use example.py template)
-- Add permission sync
-- Add prompt sync
-
-### Phase 4: Advanced Features
-- N-way sync (sync between 3+ formats simultaneously)
-- Conflict strategies (newest, manual, format-priority)
-- Selective field sync
-- Custom field mappings via config
-
 ## Design Patterns Used
 
 1. **Adapter Pattern**: Convert between incompatible interfaces
