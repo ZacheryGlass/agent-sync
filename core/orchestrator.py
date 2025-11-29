@@ -398,7 +398,8 @@ class UniversalSyncOrchestrator:
                 # Write to target (unless dry run)
                 if not self.dry_run:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
-                    self.target_adapter.write(canonical, target_path, self.config_type)
+                    self.target_adapter.write(canonical, target_path, self.config_type,
+                                              self.conversion_options)
                     target_mtime = target_path.stat().st_mtime
                 else:
                     target_mtime = pair.target_mtime
@@ -430,7 +431,8 @@ class UniversalSyncOrchestrator:
                 # Write to source (unless dry run)
                 if not self.dry_run:
                     source_path.parent.mkdir(parents=True, exist_ok=True)
-                    self.source_adapter.write(canonical, source_path, self.config_type)
+                    self.source_adapter.write(canonical, source_path, self.config_type,
+                                              self.conversion_options)
                     source_mtime = source_path.stat().st_mtime
                 else:
                     source_mtime = pair.source_mtime

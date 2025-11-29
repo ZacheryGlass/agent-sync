@@ -113,7 +113,8 @@ class FormatAdapter(ABC):
         pass
 
     @abstractmethod
-    def write(self, canonical_obj: Any, file_path: Path, config_type: ConfigType):
+    def write(self, canonical_obj: Any, file_path: Path, config_type: ConfigType,
+              options: Optional[Dict[str, Any]] = None):
         """
         Write canonical format to file in this format.
 
@@ -121,6 +122,7 @@ class FormatAdapter(ABC):
             canonical_obj: CanonicalAgent | CanonicalPermission | CanonicalPrompt
             file_path: Where to write the file
             config_type: Type of config being written
+            options: Optional conversion options (e.g., add_argument_hint)
 
         Raises:
             ValueError: If canonical_obj is invalid

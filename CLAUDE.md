@@ -16,25 +16,12 @@ The project uses a hub-and-spoke architecture with canonical data models, enabli
 
 ## Commands
 
-### Legacy Script (Currently Functional)
+### Installation
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# The original script still works for Claude <-> Copilot sync
-python sync_custom_agents.py \
-  --claude-dir ~/.claude/agents \
-  --copilot-dir ./.github/agents \
-  --dry-run
-
-# Force automatic conflict resolution
-python sync_custom_agents.py \
-  --claude-dir ~/.claude/agents \
-  --copilot-dir ./.github/agents \
-  --force --verbose
 ```
 
-### New CLI (Under Development)
+### CLI
 ```bash
 # Universal sync between any formats
 python -m cli.main \
@@ -81,9 +68,9 @@ This approach catches real integration issues like format parsing errors, file e
 
 ## Architecture
 
-### New Architecture (Hub-and-Spoke with Canonical Models)
+### Hub-and-Spoke with Canonical Models
 
-The new architecture supports N formats with 2N converters instead of N²:
+The architecture supports N formats with 2N converters instead of N²:
 
 ```
 Format A → Canonical Model ← Format B
@@ -124,20 +111,6 @@ Format A → Canonical Model ← Format B
 6. **adapters/claude.py** - Claude Code (.md files)
 7. **adapters/copilot.py** - GitHub Copilot (.agent.md files)
 8. **adapters/example.py** - Template for new adapter implementations
-
-### Legacy Architecture (sync_custom_agents.py)
-
-The original implementation remains functional for Claude <-> Copilot sync:
-
-1. **AgentConverter** (sync_custom_agents.py:93-246)
-   - Bidirectional Claude/Copilot conversion
-   - Hardcoded field mappings
-
-2. **SyncState** (sync_custom_agents.py:31-91)
-   - State tracking (same format as new architecture)
-
-3. **AgentSyncer** (sync_custom_agents.py:249-595)
-   - Orchestration specific to Claude/Copilot
 
 ### Key Design Decisions
 
@@ -201,7 +174,6 @@ agent-sync/
 │   ├── test_cli.py           # CLI tests
 │   ├── test_sync_docs.py     # Documentation sync tests
 │   └── fixtures/             # Sample files
-├── sync_custom_agents.py      # Legacy script (FUNCTIONAL)
 ├── requirements.txt
 └── CLAUDE.md
 ```
@@ -214,7 +186,6 @@ agent-sync/
 ## Development Status
 
 **Functional:**
-- Legacy sync_custom_agents.py (Claude ↔ Copilot)
 - Core canonical models
 - Claude and Copilot adapters
 - Format registry
@@ -223,7 +194,8 @@ agent-sync/
 - Universal orchestrator
 
 **In Development:**
-- Test suite (partial coverage)
+- Permission support
+- Additional format adapters
 
 ## Adding New Format Support
 

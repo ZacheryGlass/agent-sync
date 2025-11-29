@@ -72,9 +72,10 @@ class ClaudeAdapter(FormatAdapter):
             content = f.read()
         return self.to_canonical(content, config_type)
 
-    def write(self, canonical_obj: CanonicalAgent, file_path: Path, config_type: ConfigType):
+    def write(self, canonical_obj: CanonicalAgent, file_path: Path, config_type: ConfigType,
+              options: dict = None):
         """Write canonical agent to Claude format file."""
-        content = self.from_canonical(canonical_obj, config_type)
+        content = self.from_canonical(canonical_obj, config_type, options)
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
