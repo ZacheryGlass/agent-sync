@@ -168,6 +168,9 @@ Each adapter handles:
 
 - Python 3.x
 - PyYAML: For parsing YAML frontmatter in agent files
+- requests: For HTTP fetching in documentation sync
+- beautifulsoup4: For HTML parsing
+- html2text: For HTML to markdown conversion
 
 ## File Locations
 
@@ -186,12 +189,17 @@ agent-sync/
 │   └── example.py            # Template for new adapters
 ├── cli/                       # Command-line interface
 │   └── main.py               # CLI entry point
+├── scripts/                   # Utility scripts
+│   └── sync_docs.py          # Documentation sync script
+├── docs/                      # Documentation
+│   └── permissions/          # Permission research docs
 ├── tests/                     # Test suite
 │   ├── test_adapters.py      # Adapter tests
 │   ├── test_registry.py      # Registry tests
 │   ├── test_orchestrator.py  # Orchestrator tests
 │   ├── test_state_manager.py # State manager tests
 │   ├── test_cli.py           # CLI tests
+│   ├── test_sync_docs.py     # Documentation sync tests
 │   └── fixtures/             # Sample files
 ├── sync_custom_agents.py      # Legacy script (FUNCTIONAL)
 ├── requirements.txt
