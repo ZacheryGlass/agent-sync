@@ -22,14 +22,15 @@ from bs4 import BeautifulSoup
 # Documentation sources configuration
 DOC_SOURCES = {
     "claude": {
-        "url": "https://docs.anthropic.com/en/docs/claude-code/settings",
+        "url": "https://code.claude.com/docs/en/sub-agents.md",
         "output": "docs/permissions/claude-permissions.md",
-        "title": "Claude Code Settings and Permissions",
+        "title": "Claude Code Sub-agents",
+        "format": "markdown",  # Skip HTML conversion
     },
     "copilot": {
-        "url": "https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot",
+        "url": "https://docs.github.com/en/copilot/concepts/agents/about-copilot-cli#allowing-tools-to-be-used-without-manual-approval",
         "output": "docs/permissions/copilot-permissions.md",
-        "title": "GitHub Copilot Custom Instructions",
+        "title": "GitHub Copilot CLI Tool Permissions",
     },
 }
 
@@ -212,12 +213,16 @@ def sync_doc(
     if html is None:
         return False
 
-    # Convert to markdown
-    try:
-        markdown = html_to_markdown(html)
-    except Exception as e:
-        logger.error(f"Error parsing HTML from {url}: {e}")
-        return False
+    # Convert to markdown (or use as-is if already markdown)
+    content_format = config.get("format", "html")
+    if content_format == "markdown":
+        markdown = html.strip()
+    else:
+        try:
+            markdown = html_to_markdown(html)
+        except Exception as e:
+            logger.error(f"Error parsing HTML from {url}: {e}")
+            return False
 
     # Check if content changed
     existing = read_existing_content(output_path)
