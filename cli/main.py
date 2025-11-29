@@ -13,8 +13,6 @@ Usage:
     python -m cli.main --source-dir ~/.claude/agents --target-dir .github/agents \
                        --source-format claude --target-format copilot \
                        --config-type agent --direction both
-
-Status: STUB - To be implemented with full argparse configuration
 """
 
 import argparse
@@ -176,24 +174,78 @@ def main(argv: Optional[list] = None):
     parser = create_parser()
     args = parser.parse_args(argv)
 
-    # TODO: Implement full CLI logic
-    # 1. Validate arguments
-    # 2. Setup registry
-    # 3. Create state manager
-    # 4. Create orchestrator
-    # 5. Run sync
-    # 6. Handle errors
-    # 7. Return exit code
+    try:
+        # 1. Expand and validate paths
+        source_dir = args.source_dir.expanduser().resolve()
+        target_dir = args.target_dir.expanduser().resolve()
 
-    print("CLI stub - to be implemented")
-    print(f"Would sync from {args.source_dir} ({args.source_format}) "
-          f"to {args.target_dir} ({args.target_format})")
-    print(f"Config type: {args.config_type}, Direction: {args.direction}")
+        if not source_dir.exists():
+            print(f"Error: Source directory does not exist: {source_dir}", file=sys.stderr)
+            return 1
 
-    if args.dry_run:
-        print("Dry-run mode enabled")
+        if not source_dir.is_dir():
+            print(f"Error: Source path is not a directory: {source_dir}", file=sys.stderr)
+            return 1
 
-    return 0
+        # Target directory doesn't need to exist (will be created if needed)
+        # but if it exists, it must be a directory
+        if target_dir.exists() and not target_dir.is_dir():
+            print(f"Error: Target path exists but is not a directory: {target_dir}", file=sys.stderr)
+            return 1
+
+        # 2. Convert config_type string to ConfigType enum
+        config_type_map = {
+            'agent': ConfigType.AGENT,
+            'permission': ConfigType.PERMISSION,
+            'prompt': ConfigType.PROMPT
+        }
+        config_type = config_type_map[args.config_type]
+
+        # 3. Setup registry
+        registry = setup_registry()
+
+        # 4. Create state manager
+        state_file = args.state_file.expanduser().resolve() if args.state_file else None
+        state_manager = SyncStateManager(state_file=state_file)
+
+        # 5. Build conversion options
+        conversion_options = {}
+        if args.add_argument_hint:
+            conversion_options['add_argument_hint'] = True
+        if args.add_handoffs:
+            conversion_options['add_handoffs'] = True
+
+        # 6. Create orchestrator
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format=args.source_format,
+            target_format=args.target_format,
+            config_type=config_type,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction=args.direction,
+            dry_run=args.dry_run,
+            force=args.force,
+            verbose=args.verbose,
+            conversion_options=conversion_options if conversion_options else None
+        )
+
+        # 7. Run sync
+        orchestrator.sync()
+
+        # Success
+        return 0
+
+    except KeyboardInterrupt:
+        print("\nSync cancelled by user", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        if args.verbose:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+        return 1
 
 
 if __name__ == '__main__':

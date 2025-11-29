@@ -288,16 +288,14 @@ class TestErrorHandling:
             mock_instance.sync.side_effect = ValueError("Test error")
             mock_orch.return_value = mock_instance
 
-            # When CLI is fully implemented, it should propagate orchestrator errors
-            # For now, the stub returns 0 - this test documents expected behavior
             result = main([
                 '--source-dir', str(source),
                 '--target-dir', str(target),
                 '--source-format', 'claude',
                 '--target-format', 'copilot'
             ])
-            # TODO: When implemented, assert result != 0
-            assert result == 0  # Current stub behavior
+            # CLI should propagate orchestrator errors with non-zero exit
+            assert result != 0
 
     def test_error_message_to_stderr(self, parser, capsys):
         """Error messages written to stderr."""
@@ -733,3 +731,231 @@ class TestConversionOptions:
             # TODO: When implemented, verify conversion_options is None or empty
             # call_kwargs = mock_orch.call_args.kwargs
             # assert call_kwargs.get('conversion_options') is None
+
+
+class TestSingleFileConversion:
+    """Tests for single-file conversion mode."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create argument parser instance."""
+        return create_parser()
+
+    @pytest.fixture
+    def valid_source_file(self, tmp_path):
+        """Create a valid source file."""
+        source_file = tmp_path / "test-agent.md"
+        source_file.write_text("""---
+name: test-agent
+description: Test agent
+model: claude-opus-4-20250514
+tools:
+  - Bash
+  - Read
+---
+
+# Test Agent
+
+Test instructions.
+""")
+        return source_file
+
+    @pytest.fixture
+    def valid_output_file(self, tmp_path):
+        """Path for valid output file."""
+        return tmp_path / "output.agent.md"
+
+    def test_convert_file_argument_parsing(self, parser, valid_source_file, valid_output_file):
+        """Test --convert-file argument is parsed correctly."""
+        # TODO: When implemented, this should not raise
+        # args = parser.parse_args([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file)
+        # ])
+        # assert args.convert_file == valid_source_file
+        pass
+
+    def test_output_argument_parsing(self, parser, valid_source_file, valid_output_file):
+        """Test --output argument is parsed correctly."""
+        # TODO: When implemented, this should not raise
+        # args = parser.parse_args([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file)
+        # ])
+        # assert args.output == valid_output_file
+        pass
+
+    def test_convert_file_and_directory_mutually_exclusive(self, parser, valid_source_file, tmp_path):
+        """--convert-file and --source-dir are mutually exclusive."""
+        # TODO: When implemented, this should raise SystemExit
+        # source_dir = tmp_path / "source"
+        # source_dir.mkdir()
+        # with pytest.raises(SystemExit):
+        #     parser.parse_args([
+        #         '--convert-file', str(valid_source_file),
+        #         '--source-dir', str(source_dir),
+        #         '--target-dir', str(tmp_path / "target"),
+        #         '--source-format', 'claude',
+        #         '--target-format', 'copilot'
+        #     ])
+        pass
+
+    def test_single_file_conversion_explicit_formats(self, valid_source_file, valid_output_file):
+        """Convert single file with explicit source and target formats."""
+        # TODO: When implemented, test actual conversion
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'claude',
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result == 0
+        # assert valid_output_file.exists()
+        pass
+
+    def test_single_file_conversion_auto_detect_source(self, valid_source_file, valid_output_file):
+        """Convert single file with auto-detected source format."""
+        # TODO: When implemented, test format auto-detection
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result == 0
+        # assert valid_output_file.exists()
+        pass
+
+    def test_single_file_conversion_auto_detect_target(self, valid_source_file, tmp_path):
+        """Convert single file with auto-detected target format from output extension."""
+        # TODO: When implemented, test target format detection from output filename
+        # output_file = tmp_path / "output.agent.md"
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(output_file),
+        #     '--source-format', 'claude'
+        # ])
+        # assert result == 0
+        # assert output_file.exists()
+        pass
+
+    def test_output_file_auto_generated(self, valid_source_file, tmp_path):
+        """Output filename auto-generated if not specified."""
+        # TODO: When implemented, test auto-generated output filename
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result == 0
+        # # Should create test-agent.agent.md in same directory
+        # expected_output = valid_source_file.parent / "test-agent.agent.md"
+        # assert expected_output.exists()
+        pass
+
+    def test_convert_file_not_found(self, tmp_path):
+        """Error when source file doesn't exist."""
+        # TODO: When implemented, test error handling
+        # nonexistent = tmp_path / "nonexistent.md"
+        # result = main([
+        #     '--convert-file', str(nonexistent),
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result != 0
+        pass
+
+    def test_convert_file_is_directory(self, tmp_path):
+        """Error when --convert-file points to directory."""
+        # TODO: When implemented, test error handling
+        # directory = tmp_path / "dir"
+        # directory.mkdir()
+        # result = main([
+        #     '--convert-file', str(directory),
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result != 0
+        pass
+
+    def test_unsupported_source_format(self, valid_source_file, valid_output_file):
+        """Error when source format is unsupported."""
+        # TODO: When implemented, test error handling
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'unsupported',
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result != 0
+        pass
+
+    def test_unsupported_target_format(self, valid_source_file, valid_output_file):
+        """Error when target format is unsupported."""
+        # TODO: When implemented, test error handling
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'claude',
+        #     '--target-format', 'unsupported'
+        # ])
+        # assert result != 0
+        pass
+
+    def test_output_file_content_correct(self, valid_source_file, valid_output_file):
+        """Verify output file has correct format conversion."""
+        # TODO: When implemented, verify actual content
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'claude',
+        #     '--target-format', 'copilot'
+        # ])
+        # assert result == 0
+        #
+        # # Verify Copilot format
+        # content = valid_output_file.read_text()
+        # assert 'target: vscode' in content
+        # assert 'test-agent' in content
+        pass
+
+    def test_config_type_specified_for_conversion(self, valid_source_file, valid_output_file):
+        """--config-type can be specified for file conversion."""
+        # TODO: When implemented, test config type parameter
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'claude',
+        #     '--target-format', 'copilot',
+        #     '--config-type', 'agent'
+        # ])
+        # assert result == 0
+        pass
+
+    def test_conversion_options_applied(self, valid_source_file, valid_output_file):
+        """Conversion options (--add-argument-hint) work in file mode."""
+        # TODO: When implemented, test conversion options
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'claude',
+        #     '--target-format', 'copilot',
+        #     '--add-argument-hint'
+        # ])
+        # assert result == 0
+        #
+        # content = valid_output_file.read_text()
+        # # Verify argument-hint was added
+        pass
+
+    def test_verbose_output_in_file_mode(self, valid_source_file, valid_output_file, capsys):
+        """--verbose works in file conversion mode."""
+        # TODO: When implemented, test verbose output
+        # result = main([
+        #     '--convert-file', str(valid_source_file),
+        #     '--output', str(valid_output_file),
+        #     '--source-format', 'claude',
+        #     '--target-format', 'copilot',
+        #     '--verbose'
+        # ])
+        # assert result == 0
+        #
+        # captured = capsys.readouterr()
+        # assert 'convert' in captured.out.lower() or 'Converting' in captured.out
+        pass
