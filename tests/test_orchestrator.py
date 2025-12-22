@@ -17,7 +17,8 @@ import time
 from core.orchestrator import UniversalSyncOrchestrator, FilePair
 from core.registry import FormatRegistry
 from core.state_manager import SyncStateManager
-from core.canonical_models import ConfigType
+from core.canonical_models import ConfigType, CanonicalPermission
+from core.adapter_interface import FormatAdapter
 from adapters import ClaudeAdapter, CopilotAdapter
 
 
@@ -1590,3 +1591,186 @@ class TestExtractBaseName:
         path = Path("/some/path/agent.txt")
         base_name = orchestrator._extract_base_name(path, ".md")
         assert base_name == "agent"
+class MockPermissionAdapter(FormatAdapter):
+    def __init__(self, name, extension, supports_perm=True):
+        self._name = name
+        self._extension = extension
+        self._supports_perm = supports_perm
+        self.read_calls = []
+        self.write_calls = []
+
+    @property
+    def format_name(self) -> str:
+        return self._name
+
+    @property
+    def file_extension(self) -> str:
+        return self._extension
+
+    @property
+    def supported_config_types(self):
+        if self._supports_perm:
+            return [ConfigType.PERMISSION]
+        return []
+
+    def can_handle(self, file_path: Path) -> bool:
+        return file_path.name.endswith(self._extension)
+
+    def read(self, file_path: Path, config_type: ConfigType):
+        self.read_calls.append((file_path, config_type))
+        return CanonicalPermission(allow=["read"])
+
+    def write(self, canonical_obj, file_path, config_type, options=None):
+        self.write_calls.append((canonical_obj, file_path, config_type))
+        # Actually write file so stat() works
+        file_path.write_text("mock content")
+
+    def to_canonical(self, content, config_type):
+        return CanonicalPermission()
+
+    def from_canonical(self, canonical_obj, config_type, options=None):
+        return "permission content"
+
+class TestPermissionSync:
+    """Tests for permission synchronization."""
+
+    @pytest.fixture
+    def registry(self):
+        registry = FormatRegistry()
+        registry.register(MockPermissionAdapter("source_fmt", ".json"))
+        registry.register(MockPermissionAdapter("target_fmt", ".perm.json"))
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        return SyncStateManager(tmp_path / "test_state.json")
+
+    def test_permission_discovery(self, registry, state_manager, tmp_path):
+        """Test discovering permission files."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create permission files
+        (source_dir / "settings.json").write_text("{}")
+        (target_dir / "settings.perm.json").write_text("{}")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='source_fmt',
+            target_format='target_fmt',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager
+        )
+
+        pairs = orchestrator._discover_file_pairs()
+        
+        assert len(pairs) == 1
+        assert pairs[0].base_name == "settings"
+        assert pairs[0].source_path.name == "settings.json"
+        assert pairs[0].target_path.name == "settings.perm.json"
+
+    def test_permission_sync_execution(self, registry, state_manager, tmp_path):
+        """Test syncing permissions triggers correct adapter calls."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        (source_dir / "settings.json").write_text("{}")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='source_fmt',
+            target_format='target_fmt',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager
+        )
+
+        pair = FilePair(
+            base_name="settings",
+            source_path=source_dir / "settings.json",
+            target_path=None,
+            source_mtime=1000.0,
+            target_mtime=None
+        )
+
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        # Check adapter calls
+        source_adapter = registry.get_adapter('source_fmt')
+        target_adapter = registry.get_adapter('target_fmt')
+
+        assert len(source_adapter.read_calls) == 1
+        assert source_adapter.read_calls[0][1] == ConfigType.PERMISSION
+        
+        assert len(target_adapter.write_calls) == 1
+        assert target_adapter.write_calls[0][2] == ConfigType.PERMISSION
+        assert isinstance(target_adapter.write_calls[0][0], CanonicalPermission)
+
+    def test_permission_conflict_handling(self, registry, state_manager, tmp_path):
+        """Test permission conflict resolution."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='source_fmt',
+            target_format='target_fmt',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            force=True
+        )
+
+        pair = FilePair(
+            base_name="settings",
+            source_path=source_dir / "settings.json",
+            target_path=target_dir / "settings.perm.json",
+            source_mtime=2000.0, # Newer
+            target_mtime=1000.0
+        )
+
+        action = orchestrator._resolve_conflict(pair)
+        assert action == 'source_to_target'
+
+    def test_permission_state_tracking(self, registry, state_manager, tmp_path):
+        """Test that permission sync updates state correctly."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        (source_dir / "settings.json").write_text("{}")
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='source_fmt',
+            target_format='target_fmt',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager
+        )
+
+        pair = FilePair(
+            base_name="settings",
+            source_path=source_dir / "settings.json",
+            target_path=None,
+            source_mtime=1000.0,
+            target_mtime=None
+        )
+
+        orchestrator._execute_sync_action(pair, 'source_to_target')
+
+        state = state_manager.get_file_state(source_dir, target_dir, "settings")
+        assert state is not None
+        assert state['last_action'] == 'source_to_target'
