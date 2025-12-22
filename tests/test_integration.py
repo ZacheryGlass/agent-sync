@@ -38,29 +38,46 @@ def registry():
 
 
 @pytest.fixture
-def state_file(tmp_path):
-    """Create temporary state file path."""
-    return tmp_path / "test_sync_state.json"
+def test_results_dir():
+    """Create persistent test results directory."""
+    results_dir = Path("test_results")
+    if not results_dir.exists():
+        results_dir.mkdir()
+    return results_dir
+
+
+@pytest.fixture
+def state_file(test_results_dir):
+    """Create persistent state file path."""
+    return test_results_dir / "test_sync_state.json"
 
 
 @pytest.fixture
 def state_manager(state_file):
-    """Create state manager with temporary state file."""
+    """Create state manager with persistent state file."""
+    if state_file.exists():
+        state_file.unlink()
     return SyncStateManager(state_file)
 
 
 @pytest.fixture
-def claude_dir(tmp_path):
-    """Create temporary Claude agents directory."""
-    d = tmp_path / "claude_agents"
+def claude_dir(test_results_dir):
+    """Create persistent Claude agents directory."""
+    d = test_results_dir / "claude_agents"
+    if d.exists():
+        import shutil
+        shutil.rmtree(d)
     d.mkdir()
     return d
 
 
 @pytest.fixture
-def copilot_dir(tmp_path):
-    """Create temporary Copilot agents directory."""
-    d = tmp_path / "copilot_agents"
+def copilot_dir(test_results_dir):
+    """Create persistent Copilot agents directory."""
+    d = test_results_dir / "copilot_agents"
+    if d.exists():
+        import shutil
+        shutil.rmtree(d)
     d.mkdir()
     return d
 

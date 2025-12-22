@@ -95,3 +95,6 @@ dmypy.json
 # IPython
 profile_default/
 ipython_config.py
+
+# Test results
+test_results/
