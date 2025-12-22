@@ -9,19 +9,19 @@ AI coding tool. Each adapter knows how to:
 - Preserve format-specific fields via metadata
 
 Available adapters:
-- ClaudeAdapter: Claude Code (.md files)
+- ClaudeAdapter: Claude Code (.md files for agents, settings.json for permissions)
 - CopilotAdapter: GitHub Copilot (.agent.md files)
 - ExampleAdapter: Template for new implementations
 
 Adding a new adapter:
-1. Copy example.py to yourformat.py
-2. Implement FormatAdapter interface
+1. Copy adapters/example/ directory to adapters/yourformat/
+2. Rename classes and implement TODOs in adapter.py and handlers/
 3. Register with FormatRegistry in your application
 """
 
-from .claude import ClaudeAdapter
-from .copilot import CopilotAdapter
-from .example import ExampleAdapter
+from .claude.adapter import ClaudeAdapter
+from .copilot.adapter import CopilotAdapter
+from .example.adapter import ExampleAdapter
 
 __all__ = [
     'ClaudeAdapter',

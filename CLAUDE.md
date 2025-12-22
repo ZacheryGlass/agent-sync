@@ -108,9 +108,10 @@ Format A → Canonical Model ← Format B
 
 **Format Adapters:**
 
-6. **adapters/claude.py** - Claude Code (.md files)
-7. **adapters/copilot.py** - GitHub Copilot (.agent.md files)
-8. **adapters/example.py** - Template for new adapter implementations
+6. **adapters/shared/** - Shared utilities and handler interface
+7. **adapters/claude/** - Claude Code adapter with agent and permission handlers
+8. **adapters/copilot/** - GitHub Copilot adapter with agent handler
+9. **adapters/example/** - Template for new adapter implementations
 
 ### Key Design Decisions
 
@@ -157,9 +158,10 @@ agent-sync/
 │   ├── orchestrator.py        # Sync orchestrator
 │   └── state_manager.py       # State tracking
 ├── adapters/                  # Format adapters
-│   ├── claude.py             # Claude Code adapter
-│   ├── copilot.py            # GitHub Copilot adapter
-│   └── example.py            # Template for new adapters
+│   ├── shared/               # Shared utilities and handler interface
+│   ├── claude/               # Claude Code adapter (coordinator + handlers)
+│   ├── copilot/              # GitHub Copilot adapter (coordinator + handlers)
+│   └── example/              # Template for new adapters
 ├── cli/                       # Command-line interface
 │   └── main.py               # CLI entry point
 ├── scripts/                   # Utility scripts
@@ -199,19 +201,30 @@ agent-sync/
 
 ## Adding New Format Support
 
-1. Create adapter in `adapters/newformat.py`:
-   ```python
-   class NewFormatAdapter(FormatAdapter):
-       def to_canonical(self, content, config_type): ...
-       def from_canonical(self, canonical_obj, config_type): ...
+1. Copy template directory:
+   ```bash
+   cp -r adapters/example adapters/newformat
    ```
 
-2. Register in application:
+2. Implement adapter coordinator in `adapters/newformat/adapter.py`:
+   - Rename `ExampleAdapter` to `NewFormatAdapter`
+   - Update `format_name`, `file_extension`, `can_handle()`
+   - Register handlers for each config type in `__init__()`
+
+3. Implement handlers in `adapters/newformat/handlers/`:
+   - `agent_handler.py`: Implement `to_canonical()` and `from_canonical()` for agents
+   - Add more handlers for permissions, prompts, etc. as needed
+   - Use shared utilities from `adapters/shared/` where applicable
+
+4. Register in application:
    ```python
+   from adapters import NewFormatAdapter
    registry.register(NewFormatAdapter())
    ```
 
-3. Add tests in `tests/test_adapters.py`
-4. Add fixtures in `tests/fixtures/newformat/`
+5. Add tests in `tests/test_adapters.py`
+6. Add fixtures in `tests/fixtures/newformat/`
+
+See `adapters/example/` for a complete template with detailed TODOs and examples.
 - Keep all documentation very concise. Only what the engineers need to know.
 - All documentation is for the application developers. Not for the users!

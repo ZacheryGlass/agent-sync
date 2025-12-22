@@ -1,48 +1,20 @@
 """
-GitHub Copilot format adapter.
+Copilot agent config type handler.
 
-GitHub Copilot stores agents as Markdown files with YAML frontmatter in:
-- Project-level: .github/agents/
-
-File format:
----
-name: agent-name
-description: Agent description
-tools: ["read", "search", "edit"]  # Array format
-model: Claude Sonnet 4|Claude Opus 4  # Full model names
-target: vscode
-argument-hint: (optional, Copilot-specific)
-handoffs: (optional, Copilot-specific)
-mcp-servers: (optional, Copilot-specific)
----
-Agent instructions in markdown...
-
-This adapter:
-- Parses YAML frontmatter + markdown body
-- Converts tools from array to list
-- Maps full model names (Claude Sonnet 4) to canonical (sonnet)
-- Preserves Copilot-specific fields (argument-hint, handoffs, target, mcp-servers) in metadata
-- Always adds 'target: vscode' when converting to Copilot format
+Handles conversion of agent configurations between Copilot format
+and canonical representation.
 """
 
-import re
-import yaml
-from pathlib import Path
-from typing import List, Optional, Dict, Any
-
-from core.adapter_interface import FormatAdapter
+from typing import Any, Dict, Optional
 from core.canonical_models import CanonicalAgent, ConfigType
+from adapters.shared.config_type_handler import ConfigTypeHandler
+from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
 
 
-class CopilotAdapter(FormatAdapter):
-    """
-    Adapter for GitHub Copilot agent format.
+class CopilotAgentHandler(ConfigTypeHandler):
+    """Handler for Copilot agent files (.agent.md)."""
 
-    Handles bidirectional conversion between Copilot's .agent.md format
-    and the canonical agent representation.
-    """
-
-    # Model name mappings
+    # Model name mappings (from class level of original CopilotAdapter)
     MODEL_TO_CANONICAL = {
         'claude sonnet 4': 'sonnet',
         'claude opus 4': 'opus',
@@ -55,62 +27,24 @@ class CopilotAdapter(FormatAdapter):
         'haiku': 'Claude Haiku 4',
     }
 
-    def __init__(self):
-        """Initialize adapter with empty warnings list."""
-        self.warnings: List[str] = []
-
     @property
-    def format_name(self) -> str:
-        return "copilot"
+    def config_type(self) -> ConfigType:
+        return ConfigType.AGENT
 
-    @property
-    def file_extension(self) -> str:
-        return ".agent.md"
-
-    @property
-    def supported_config_types(self) -> List[ConfigType]:
-        # Copilot only supports agents, not permissions or prompts
-        return [ConfigType.AGENT]
-
-    def can_handle(self, file_path: Path) -> bool:
-        """Check if file is a Copilot agent file."""
-        return file_path.name.endswith('.agent.md')
-
-    def read(self, file_path: Path, config_type: ConfigType) -> CanonicalAgent:
-        """Read Copilot agent file and convert to canonical."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        return self.to_canonical(content, config_type)
-
-    def write(self, canonical_obj: CanonicalAgent, file_path: Path, config_type: ConfigType,
-              options: dict = None):
-        """Write canonical agent to Copilot format file."""
-        content = self.from_canonical(canonical_obj, config_type, options)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-    def to_canonical(self, content: str, config_type: ConfigType) -> CanonicalAgent:
+    def to_canonical(self, content: str) -> CanonicalAgent:
         """
-        Convert Copilot format to canonical.
+        Convert Copilot agent file to canonical.
 
         Parses YAML frontmatter and markdown body, extracts fields,
         and creates CanonicalAgent with preserved metadata.
         """
-        self.warnings = []
-
-        # Parse YAML frontmatter
-        match = re.match(r'^---\n(.*?)\n---\n(.*)$', content, re.DOTALL)
-        if not match:
-            raise ValueError("No YAML frontmatter found in Copilot agent file")
-
-        yaml_content, body = match.groups()
-        frontmatter = yaml.safe_load(yaml_content)
+        frontmatter, body = parse_yaml_frontmatter(content)
 
         # Create canonical agent
         agent = CanonicalAgent(
             name=frontmatter.get('name', ''),
             description=frontmatter.get('description', ''),
-            instructions=body.strip(),
+            instructions=body,
             tools=frontmatter.get('tools', []) if isinstance(frontmatter.get('tools'), list) else [],
             model=self._normalize_model(frontmatter.get('model')),
             source_format='copilot'
@@ -131,15 +65,17 @@ class CopilotAdapter(FormatAdapter):
 
         return agent
 
-    def from_canonical(self, canonical_obj: CanonicalAgent, config_type: ConfigType,
+    def from_canonical(self, canonical_obj: Any,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """
-        Convert canonical to Copilot format.
+        Convert canonical agent to Copilot format.
 
         Generates YAML frontmatter with Copilot-specific fields and
         markdown body. Options can enable optional fields like argument-hint.
         """
-        self.warnings = []
+        if not isinstance(canonical_obj, CanonicalAgent):
+            raise ValueError("Expected CanonicalAgent")
+
         options = options or {}
 
         # Build frontmatter
@@ -173,10 +109,7 @@ class CopilotAdapter(FormatAdapter):
         if canonical_obj.get_metadata('copilot_mcp_servers'):
             frontmatter['mcp-servers'] = canonical_obj.get_metadata('copilot_mcp_servers')
 
-        # Generate YAML
-        yaml_str = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False)
-
-        return f"---\n{yaml_str}---\n{canonical_obj.instructions}\n"
+        return build_yaml_frontmatter(frontmatter, canonical_obj.instructions)
 
     def _normalize_model(self, model: Optional[str]) -> Optional[str]:
         """Convert Copilot model names to canonical form."""
@@ -187,6 +120,3 @@ class CopilotAdapter(FormatAdapter):
     def _denormalize_model(self, model: str) -> str:
         """Convert canonical model names to Copilot form."""
         return self.MODEL_FROM_CANONICAL.get(model.lower(), model)
-
-    def get_conversion_warnings(self) -> List[str]:
-        return self.warnings

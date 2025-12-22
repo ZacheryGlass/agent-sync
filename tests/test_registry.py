@@ -101,9 +101,11 @@ class TestFormatRegistry:
         assert registry.supports_config_type('claude', ConfigType.AGENT)
         assert registry.supports_config_type('copilot', ConfigType.AGENT)
 
-        # Neither supports PERMISSION or PROMPT yet (not implemented)
-        assert not registry.supports_config_type('claude', ConfigType.PERMISSION)
+        # Claude supports PERMISSION, Copilot does not
+        assert registry.supports_config_type('claude', ConfigType.PERMISSION)
         assert not registry.supports_config_type('copilot', ConfigType.PERMISSION)
+
+        # Neither supports PROMPT yet (not implemented)
         assert not registry.supports_config_type('claude', ConfigType.PROMPT)
         assert not registry.supports_config_type('copilot', ConfigType.PROMPT)
 
@@ -120,10 +122,12 @@ class TestFormatRegistry:
         assert 'copilot' in formats
         assert len(formats) == 2
 
-        # No adapters support PERMISSION or PROMPT yet
+        # Only Claude supports PERMISSION
         formats = registry.get_formats_supporting(ConfigType.PERMISSION)
-        assert len(formats) == 0
+        assert 'claude' in formats
+        assert len(formats) == 1
 
+        # No adapters support PROMPT yet
         formats = registry.get_formats_supporting(ConfigType.PROMPT)
         assert len(formats) == 0
 

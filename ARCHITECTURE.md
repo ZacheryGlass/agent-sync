@@ -122,28 +122,91 @@ Each adapter handles:
 - **Tool conversion**: Unify tool representations
 - **Metadata preservation**: Store unique fields for round-trips
 
+### Handler-Based Adapter Architecture
+
+Each format adapter uses a handler-based pattern to separate concerns by config type:
+
+```
+FormatAdapter (Coordinator)
+    ├── AgentHandler (handles AGENT config type)
+    ├── PermissionHandler (handles PERMISSION config type)
+    └── PromptHandler (handles PROMPT config type)
+```
+
+**Benefits:**
+- **Single Responsibility**: Each handler focuses on one config type
+- **Scalability**: Easy to add new config types without bloating adapter files
+- **Testability**: Handlers can be tested in isolation
+- **Reusability**: Shared utilities (frontmatter parsing) reduce duplication
+- **Maintainability**: Smaller, focused files instead of large monolithic adapters
+
+**Structure:**
+```
+adapters/
+├── shared/
+│   ├── config_type_handler.py    # Handler interface
+│   └── frontmatter.py             # Shared YAML parsing utilities
+├── claude/
+│   ├── adapter.py                 # Coordinator (delegates to handlers)
+│   └── handlers/
+│       ├── agent_handler.py       # AGENT config type logic
+│       └── perm_handler.py        # PERMISSION config type logic
+└── copilot/
+    ├── adapter.py                 # Coordinator
+    └── handlers/
+        └── agent_handler.py       # AGENT config type logic
+```
+
+**Coordinator Pattern**: The adapter class (e.g., ClaudeAdapter) registers handlers in `__init__()` and delegates `to_canonical()` and `from_canonical()` calls to the appropriate handler based on config type.
+
+**Handler Interface**: All handlers extend `ConfigTypeHandler` and implement:
+- `config_type` property: Returns the ConfigType this handler processes
+- `to_canonical(content)`: Convert format content to canonical model
+- `from_canonical(canonical_obj, options)`: Convert canonical model to format content
+
+**Shared Utilities**:
+- `adapters/shared/frontmatter.py`: Provides `parse_yaml_frontmatter()` and `build_yaml_frontmatter()` for formats using YAML frontmatter + Markdown (Claude, Copilot)
+- Eliminates code duplication across adapters
+
 ## Format Adapters
 
 ### Implemented Adapters
 
-**ClaudeAdapter** (`adapters/claude.py`)
+**ClaudeAdapter** (`adapters/claude/`)
 - Format: YAML frontmatter + Markdown
-- File: `agent-name.md`
+- File: `agent-name.md` (agents), `settings.json` (permissions)
 - Tools: Comma-separated string
 - Model: Short names (sonnet, opus, haiku)
 - Unique fields: permissionMode, skills
+- Handlers: `ClaudeAgentHandler`, `ClaudePermissionHandler`
 
-**CopilotAdapter** (`adapters/copilot.py`)
+**CopilotAdapter** (`adapters/copilot/`)
 - Format: YAML frontmatter + Markdown
 - File: `agent-name.agent.md`
 - Tools: Array
 - Model: Full names (Claude Sonnet 4)
 - Unique fields: argument-hint, handoffs, target, mcp-servers
+- Handlers: `CopilotAgentHandler`
 
 ### Adding New Adapters
 
-Use `adapters/example.py` as a template for implementing new format adapters.
-See the ExampleAdapter class for detailed implementation guidance.
+Use `adapters/example/` as a template for implementing new format adapters.
+
+**Steps:**
+1. Copy `adapters/example/` directory to `adapters/yourformat/`
+2. In `adapters/yourformat/adapter.py`:
+   - Rename `ExampleAdapter` to `YourFormatAdapter`
+   - Update `format_name`, `file_extension`, and `can_handle()` for your format
+   - Add handlers in `__init__()` for each config type you support
+3. In `adapters/yourformat/handlers/agent_handler.py`:
+   - Rename `ExampleAgentHandler` to `YourFormatAgentHandler`
+   - Implement `to_canonical()` to parse your format
+   - Implement `from_canonical()` to serialize to your format
+   - Use shared utilities (`parse_yaml_frontmatter()`, etc.) where applicable
+4. Add more handlers for additional config types (permissions, prompts, etc.)
+5. Register your adapter in `cli/main.py` or your application
+
+See `ClaudeAdapter` and `CopilotAdapter` for working examples of the handler-based pattern.
 
 ## Information Preservation
 
