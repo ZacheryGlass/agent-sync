@@ -47,8 +47,9 @@ class CopilotAdapter(FormatAdapter):
         return list(self._handlers.keys())
 
     def can_handle(self, file_path: Path) -> bool:
-        """Check if file is a Copilot agent file."""
-        return file_path.name.endswith('.agent.md')
+        """Check if file is a Copilot agent file or permission file."""
+        return (file_path.name.endswith('.agent.md') or
+                file_path.name.endswith('.perm.json'))
 
     def read(self, file_path: Path, config_type: ConfigType) -> CanonicalAgent:
         """Read file and convert to canonical."""
