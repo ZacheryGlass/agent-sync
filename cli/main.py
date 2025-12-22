@@ -53,14 +53,15 @@ Examples:
            --source-format claude --target-format copilot \\
            --config-type agent
 
+  # Sync Claude permissions to Copilot
+  %(prog)s --source-dir ~/.claude --target-dir .github \\
+           --source-format claude --target-format copilot \\
+           --config-type permission
+
   # Bidirectional sync with dry-run
   %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
            --source-format claude --target-format copilot \\
            --config-type agent --direction both --dry-run
-
-  # Multi-way sync (future feature)
-  %(prog)s --sync-all --formats claude,copilot,cursor \\
-           --config-type agent
         """
     )
 
