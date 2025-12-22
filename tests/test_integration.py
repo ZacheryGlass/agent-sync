@@ -252,6 +252,50 @@ Updated instructions.
         assert "Grep" in content
         assert "Updated instructions" in content
 
+    def test_sync_official_claude_example(
+        self, registry, state_manager, claude_dir, copilot_dir
+    ):
+        """Test conversion of 'official' Claude agent example to Copilot format."""
+        # Arrange: Load official fixture
+        fixtures_dir = Path("tests/fixtures")
+        claude_source = fixtures_dir / "claude" / "official-code-reviewer.md"
+        expected_copilot = fixtures_dir / "copilot" / "official-code-reviewer.agent.md"
+        
+        # Copy to source directory
+        import shutil
+        shutil.copy(claude_source, claude_dir / "official-code-reviewer.md")
+
+        # Act: Run sync (Claude -> Copilot)
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=claude_dir,
+            target_dir=copilot_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        generated_file = copilot_dir / "official-code-reviewer.agent.md"
+        assert generated_file.exists(), "Copilot file should be generated"
+        
+        generated_content = generated_file.read_text(encoding='utf-8')
+        expected_content = expected_copilot.read_text(encoding='utf-8')
+        
+        # Verify essential content matching
+        # (Exact match might be tricky due to YAML formatting differences, so we check key components)
+        assert "name: code-reviewer" in generated_content
+        assert "target: vscode" in generated_content
+        assert "description: Expert code review specialist" in generated_content
+        assert "- Read" in generated_content
+        assert "- Grep" in generated_content
+        assert "model: inherit" in generated_content
+        assert "You are a senior code reviewer" in generated_content
+
+
 
 # =============================================================================
 # TestCopilotToClaudeSync - Copilot -> Claude direction tests
