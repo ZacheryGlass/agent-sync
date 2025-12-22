@@ -284,6 +284,41 @@ class TestCopilotToClaudeSync:
         assert "A Copilot test agent" in content
         assert "Copilot agent instructions here" in content
 
+    def test_sync_official_copilot_example(
+        self, registry, state_manager, claude_dir, copilot_dir
+    ):
+        """Test conversion of 'official' Copilot agent example to Claude format."""
+        # Arrange: Load official fixture
+        fixtures_dir = Path("tests/fixtures")
+        copilot_source = fixtures_dir / "copilot" / "official-pr-reviewer.agent.md"
+        expected_claude = fixtures_dir / "claude" / "official-pr-reviewer.md"
+        
+        # Copy to source directory
+        import shutil
+        shutil.copy(copilot_source, copilot_dir / "official-pr-reviewer.agent.md")
+
+        # Act: Run sync (Copilot -> Claude)
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=copilot_dir,
+            target_dir=claude_dir,
+            source_format='copilot',
+            target_format='claude',
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        generated_file = claude_dir / "official-pr-reviewer.md"
+        assert generated_file.exists(), "Claude file should be generated"
+        
+        generated_content = generated_file.read_text(encoding='utf-8')
+        expected_content = expected_claude.read_text(encoding='utf-8')
+        
+        assert generated_content.strip() == expected_content.strip()
+
 
 # =============================================================================
 # TestBidirectionalSync - Bidirectional sync tests

@@ -34,11 +34,13 @@ When adding a new test case:
 ### Claude
 - **simple-agent.md**: Minimal required fields only
 - **full-agent.md**: All fields including optional ones
+- **official-pr-reviewer.md**: Expected output from converting the official Copilot example
 - **edge-cases/**: Unusual but valid configurations
 
 ### Copilot
 - **simple-agent.agent.md**: Basic agent
 - **full-agent.agent.md**: With handoffs, argument-hint, mcp-servers
+- **official-pr-reviewer.agent.md**: Based on official GitHub Copilot agent examples
 
 ### Others
 - To be added when implementing those adapters
