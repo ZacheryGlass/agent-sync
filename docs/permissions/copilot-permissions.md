@@ -1,823 +1,318 @@
 ---
-title: GitHub Copilot Custom Instructions
-source_url: https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot
-fetched_at: 2025-11-29T01:32:23Z
+ContentId: 8f2c4a1d-9e3b-4c5f-a7d8-6b9c2e4f1a3d
+DateApproved: 12/10/2025
+MetaDescription: Learn how to use built-in tools, MCP tools, and extension tools to extend chat in VS Code with specialized functionality.
+MetaSocialImage: ../images/shared/github-copilot-social.png
 ---
+# Use tools in chat
 
-# Adding repository custom instructions for GitHub Copilot
+Tools extend chat in Visual Studio Code with specialized functionality for accomplishing specific tasks like searching code, running commands, fetching web content, or invoking APIs. VS Code supports three types of tools: built-in tools, Model Context Protocol (MCP) tools, and extension tools.
 
-Create repository custom instructions files that give Copilot additional context on how to understand your project and how to build, test and validate its changes.
+This article describes the different types of tools available in VS Code, how to use them in your chat prompts, and how to manage tool invocations and approvals.
 
-## Tool navigation
+<video src="../images/chat-tools/chat-tools-picker.mp4" title="Video showing how to select and configure tools in the chat tools picker." autoplay loop controls muted poster="../images/chat-tools/chat-tools-picker.png"></video>
 
-## In this article
+## Types of tools
 
-This version of this article is for using repository custom instructions on the GitHub website. Click the tabs above for information on using custom instructions in other environments. 
+VS Code supports three types of tools that you can use in chat:
 
-## Introduction
+<details>
+<summary>Built-in tools</summary>
 
-Repository custom instructions let you provide Copilot with repository-specific guidance and preferences. For more information, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization).
+VS Code provides a comprehensive set of built-in tools that are automatically available in chat. These tools cover common development tasks and are optimized for working within your workspace.
 
-## Prerequisites for repository custom instructions
+Built-in tools don't require any installation or configuration and are available as soon as you start using chat.
 
-  * You must have a custom instructions file (see the instructions below).
+For a complete list of built-in tools and their descriptions, see the [Chat tools reference](/docs/copilot/reference/copilot-vscode-features.md#chat-tools).
 
+</details>
 
+<details>
+<summary>MCP tools</summary>
 
-This version of this article is for using repository custom instructions and prompt files in VS Code. Click the tabs above for instructions on using custom instructions in other environments.
+Model Context Protocol (MCP) is an open standard that enables AI models to use external tools and services through a unified interface. MCP servers provide tools that you can add to VS Code to extend chat with extra capabilities.
 
-## Introduction
+You need to install and configure MCP servers before you can use their tools in chat. MCP servers can run locally on your machine or be hosted remotely.
 
-Repository custom instructions let you provide Copilot with repository-specific guidance and preferences. For more information, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization).
+Learn more about [configuring MCP servers in VS Code](/docs/copilot/customization/mcp-servers.md).
 
-## Prerequisites for repository custom instructions
+</details>
 
-  * You must have a custom instructions file (see the instructions below).
+<details>
+<summary>Extension tools</summary>
 
+VS Code extensions can contribute tools that integrate deeply with the editor. Extension tools use the Language Model Tools API to provide specialized functionality while accessing the full range of VS Code extension APIs.
 
+Extension tools are automatically available when you install an extension that contributes them. Users don't need separate installation or configuration beyond installing the extension itself.
 
-This version of this article is for using repository custom instructions in Visual Studio. Click the tabs above for instructions on using custom instructions in other environments.
+For developers looking to create extension tools, see the [Language Model Tools API guide](/api/extension-guides/ai/tools.md).
 
-## Introduction
+</details>
 
-Repository custom instructions let you provide Copilot with repository-specific guidance and preferences. For more information, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization).
+## Enable tools for chat
 
-## Prerequisites for repository custom instructions
+Before you can use tools in chat, you need to enable them in the Chat view. You can enable or disable tools on a per-request basis by using the tools picker. You can add more tools by [installing MCP servers](/docs/copilot/customization/mcp-servers.md) or [extensions](/docs/getstarted/extensions.md) that contribute tools.
 
-  * You must have a custom instructions file (see the instructions below).
+> [!TIP]
+> Select only the tools that are relevant for your prompt to improve your results.
 
+To access the tools picker:
 
+1. Open the Chat view and select **Agent** from the agent picker.
 
-This version of this article is for using repository custom instructions in JetBrains IDEs. Click the tabs above for instructions on using custom instructions in other environments.
+1. Select the **Configure Tools** button in the chat input field.
 
-## Introduction
+    ![Screenshot showing the Chat view, highlighting the Configure Tools button in the chat input.](../images/chat-tools/agent-mode-select-tools.png)
 
-Repository custom instructions let you provide Copilot with repository-specific guidance and preferences. For more information, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization).
+1. Select or deselect tools to control which ones are available for the current request.
 
-## Prerequisites for repository custom instructions
+    Use the search box to filter the list of tools.
 
-  * You must have a custom instructions file (see the instructions below).
+When you customize chat with [prompt files](/docs/copilot/customization/prompt-files.md) or [custom agents](/docs/copilot/customization/custom-agents.md), you can specify which tools are available for a given prompt or mode. Learn more about the [tool list priority order](/docs/copilot/customization/custom-agents.md#tool-list-priority).
 
+## Use tools in your prompts
 
+When using [agents](/docs/copilot/chat/copilot-chat.md#built-in-agents), the agent automatically determines which tools to use from the enabled tools based on your prompt and the context of your request. The agent autonomously chooses and invokes relevant tools as needed to accomplish the task.
 
-This version of this article is for using repository custom instructions in Xcode. Click the tabs above for instructions on using custom instructions in other environments.
+You can also explicitly reference tools in your prompts by typing `#` followed by the tool name. This is useful when you want to ensure a specific tool is used. Type `#` in the chat input field to see a list of available tools, including built-in tools, MCP tools from installed servers, extension tools, and tool sets.
 
-## Introduction
+**Examples of explicit tool references:**
 
-Repository custom instructions let you provide Copilot with repository-specific guidance and preferences. For more information, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization).
+* `"Summarize the content from #fetch https://code.visualstudio.com/updates"`
+* `"How does routing work in Next.js? #githubRepo vercel/next.js"`
+* `"Fix the issues in #problems"`
+* `"Explain the authentication flow #codebase"`
 
-## Prerequisites for repository custom instructions
+Some tools accept parameters directly in the prompt. For example, `#fetch` requires a URL and `#githubRepo` requires a repository name.
 
-  * You must have a custom instructions file (see the instructions below).
+> [!TIP]
+> By default, tool call details are collapsed in the chat conversation. You can uncollapse them by selecting the tool summary line in chat, or change the default behavior with the `setting(chat.agent.thinking.collapsedTools)` setting (experimental).
 
+## Tool approval
 
+Some tools require your approval before they can run. This is a security measure because tools can perform actions that modify files, your environment, or attempt prompt injection attacks through malicious tool output.
 
-This version of this article is for using repository custom instructions with the GitHub Copilot CLI. Click the tabs above for instructions on using custom instructions in other environments.
+When a tool requires approval, a confirmation dialog appears showing the tool details. Review the information carefully before approving the tool. You can approve the tool for a single use, for the current session, for the current workspace, or for all future invocations.
 
-## Prerequisites for repository custom instructions
+![Screenshot of a tool confirmation dialog showing tool details and approval options.](../images/chat-tools/chat-approve-tool.png)
 
-  * You must have a custom instructions file (see the instructions below).
+Tools and agent actions might result in file modifications. Learn how you can prevent accidental [edits to sensitive files](/docs/copilot/chat/review-code-edits.md#edit-sensitive-files) in your workspace.
 
+> [!IMPORTANT]
+> Always review tool parameters carefully before approving, especially for tools that modify files, run commands, or access external services. See the [Security considerations](/docs/copilot/security.md) for using AI in VS Code.
 
+### Enable or disable tool auto approval (Experimental)
 
-Note
+By default, you can choose to automatically approve any tool. To prevent accidental approvals, you can disable automatic approvals for specific tools with the `setting(chat.tools.eligibleForAutoApproval)` setting. Set the value to `false` to always require manual approval for that tool.
 
-This feature is currently in public preview and is subject to change.
+Organizations can also use device management policies to enforce manual approvals for specific tools. Learn more in the [Enterprise documentation](/docs/setup/enterprise.md).
 
-This version of this article is for using repository custom instructions in Eclipse. Click the tabs above for instructions on using custom instructions in other environments.
+### URL approval
 
-## Introduction
+When a tool attempts to access a URL, such as with the `fetch` tool, a two-step approval process is used to protect you from malicious or unexpected content. VS Code shows a confirmation dialog with the URL details for your review in the Chat view.
 
-Repository custom instructions let you provide Copilot with repository-specific guidance and preferences. For more information, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization).
+* **Pre-approval: approving the request to the URL**
 
-## Prerequisites for repository custom instructions
+    This step ensures that you trust the domain being contacted and can prevent sensitive data to be sent to untrusted sites.
 
-  * You must have a custom instructions file (see the instructions below).
+    ![Screenshot of a URL approval dialog showing URL details and approval options.](../images/chat-tools/chat-approve-url.png)
 
+    You have options for one-time approval or for automatically approving future requests to the specific URL or domain. Selecting auto-approval does not influence the need for reviewing the results. When you select **Allow requests to**, you can choose to configure both pre and post approvals for the URL or domain.
 
+    > [!NOTE]
+    > The pre-approval respects the ["Trusted Domains" feature](/docs/editing/editingevolved.md#_outgoing-link-protection). If a domain is listed there, you are automatically approved to make requests to that domain and defer the response reviewing step.
 
-  * Your personal choice of whether to use custom instructions must be set to enabled. This is enabled by default. See Enabling or disabling repository custom instructions later in this article.
+* **Post-approval: approving the response content fetched from the URL**
 
+    This step ensures that you review the fetched content before it is added to the chat or passed to other tools, preventing potential prompt injection attacks.
 
+    For example, you might approve a request to fetch content from a well-known site, like GitHub.com. But because the content, such as issue description or comments, is user-generated, it could contain harmful content that might manipulate the model's behavior.
 
-  * Custom instructions must be enabled. This feature is enabled by default. See Enabling or disabling repository custom instructions later in this article.
+    You have options for one-time approval or for automatically approving future responses from the specific URL or domain.
 
+    > [!IMPORTANT]
+    > The post-approval step is not linked to the "Trusted Domains" feature and always requires your review. This is a security measure to prevent issues with untrusted content on a domain that you would otherwise trust.
 
+The `setting(chat.tools.urls.autoApprove)` setting is used to store your auto-approve URL patterns. The setting value is either a boolean to enable or disable auto-approvals for both requests and responses, or an object with `approveRequest` and `approveResponse` properties for granular control. You can use exact URLs, glob patterns, or wildcards.
 
-  * The **Enable custom instructions...** option must be enabled in your settings. This is enabled by default. See Enabling or disabling repository custom instructions later in this article.
+URL auto-approval examples:
 
+```jsonc
+{
+"chat.tools.urls.autoApprove": {
+    "https://www.example.com": false,
+    "https://*.contoso.com/*": true,
+    "https://example.com/api/*": {
+        "approveRequest": true,
+        "approveResponse": false
+    }
+}
+```
 
+### Reset tool confirmations
 
-  * The latest version of the Copilot extension must be installed in your JetBrains IDE.
+To clear all saved tool approvals, use the **Chat: Reset Tool Confirmations** command in the Command Palette (`kb(workbench.action.showCommands)`).
 
+## Edit tool parameters
 
+You can review and edit the input parameters before a tool runs:
 
-  * The latest version of the Copilot extension must be installed in Xcode.
+1. When the tool confirmation dialog appears, select the chevron next to the tool name to expand its details.
 
+1. Edit any tool input parameters as needed.
 
+1. Select **Allow** to run the tool with the modified parameters.
 
-  * The latest version of the Copilot extension must be installed in Eclipse.
+## Terminal commands
 
+The agent might use terminal commands as part of its workflow to accomplish tasks. When the agent decides to run terminal commands, it uses the built-in terminal tool to execute them in an integrated terminal within VS Code.
 
+In the chat conversation, the agent displays the commands it ran. You can view the output of the command inline in chat by selecting **Show Output** (`>`) next to the command. You can also view the full output in the integrated terminal by selecting **Show Terminal**.
 
-## Creating custom instructions
+![Screenshot showing terminal command output in chat.](../images/chat-tools/terminal-command-output.png)
 
-JetBrains IDEs support a single `.github/copilot-instructions.md` custom instructions file stored in the repository, and a locally stored `global-copilot-instructions.md` file.
+Use the experimental `setting(chat.tools.terminal.outputLocation)` setting to configure where terminal command output appears: inline in chat, in the integrated terminal.
 
-You can create the `.github/copilot-instructions.md` file in your repository using the Copilot settings page, or you can create the file manually.
+In the terminal pane, you can see the list of terminals that the agent has used for a chat session. You can also distinguish agent terminals by the chat icon in the terminals list.
 
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
+![Screenshot showing the integrated terminal with multiple agent terminals.](../images/chat-tools/agent-terminals-in-terminal-pane.png)
 
-### Using the settings page
+### Automatically approve terminal commands
 
-  1. In your JetBrains IDE, click the **File** menu (Windows), or the name of the application in the menu bar (macOS), then click **Settings**.
-  2. Under **Tools** , click **GitHub Copilot** , then click **Customizations**.
-  3. Under "Copilot Instructions", click **Workspace** or **Global** to choose whether the custom instructions apply to the current workspace or all workspaces.
+You can configure which terminal commands are automatically approved by using the `setting(chat.tools.terminal.autoApprove)` setting. You can specify both allowed and denied commands:
 
-
-
-### Manually creating a workspace custom instructions file
-
-  1. In the root of your repository, create a file named `.github/copilot-instructions.md`.
-
-Create the `.github` directory if it does not already exist.
-
-  2. Add natural language instructions to the file, in Markdown format.
-
-
-
-
-Once saved, these instructions will apply to the current workspace in JetBrains IDEs that you open with Copilot enabled.
-
-### Manually creating a global custom instructions file
-
-To apply the same instructions across all workspaces in JetBrains IDEs, you can create a global custom instructions file on your local machine.
-
-  1. Open your file explorer or terminal.
-
-  2. Navigate to the appropriate location for your operating system:
-
-     * **macOS** : `/Users/YOUR-USERNAME/.config/github-copilot/intellij/`
-     * **Windows** : `C:\Users\YOUR-USERNAME\AppData\Local\github-copilot\intellij\`
-  3. Create a file named `global-copilot-instructions.md` in that directory.
-
-  4. Add your custom instructions in natural language, using Markdown format.
-
-
-
-
-Once saved, these instructions will apply globally across all workspaces in JetBrains IDEs that you open with Copilot enabled.
-
-Xcode supports a single `.github/copilot-instructions.md` custom instructions file stored in the repository.
-
-You can create a custom instructions file in your repository via the Copilot settings page.
-
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
-
-  1. Open the GitHub Copilot for Xcode application.
-  2. At the top of the application window, under **Settings** , click **Advanced**.
-  3. To the right of "Custom Instructions", click **Current Workspace** or **Global** to choose whether the custom instructions apply to the current workspace or all workspaces.
-
-
-
-Eclipse supports two types of repository custom instructions: workspace and project custom instructions.
-
-To create a workspace custom instructions file, you can use the Copilot settings page. To create a project custom instructions file, you can create the file manually in the project directory.
-
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
-
-### Creating a workspace custom instructions file
-
-  1. To open the Copilot Chat panel, click the Copilot icon () in the status bar at the bottom of Eclipse.
-  2. From the menu, select "Edit preferences".
-  3. In the left pane, expand GitHub Copilot and click **Custom Instructions**.
-  4. Select **Enable workspace instructions**.
-  5. In the "Workspace" section, under "Set custom instructions to guide Copilot's code suggestions in this workspace", add natural language instructions to the file, in Markdown format.
-
-
-
-### Creating a project custom instructions file
-
-  1. In the root of your project directory, create a file named `.github/copilot-instructions.md`.
-  2. Add your custom instructions in natural language, using Markdown format.
-
-
-
-Once saved, these instructions will apply to the current project in Eclipse that you open with Copilot enabled.
-
-GitHub Copilot supports three types of repository custom instructions.
-
-  * **Repository-wide custom instructions** , which apply to all requests made in the context of a repository.
-
-These are specified in a `copilot-instructions.md` file in the `.github` directory of the repository. See Creating repository-wide custom instructions.
-
-  * **Path-specific custom instructions** , which apply to requests made in the context of files that match a specified path.
-
-These are specified in one or more `NAME.instructions.md` files within the `.github/instructions` directory in the repository. See Creating path-specific custom instructions.
-
-If the path you specify matches a file that Copilot is working on, and a repository-wide custom instructions file also exists, then the instructions from both files are used. You should avoid potential conflicts between instructions as Copilot's choice between conflicting instructions is non-deterministic.
-
-  * **Agent instructions** are used by AI agents.
-
-You can create one or more `AGENTS.md` files, stored anywhere within the repository. When Copilot is working, the nearest `AGENTS.md` file in the directory tree will take precedence. For more information, see the [openai/agents.md repository](https://github.com/openai/agents.md).
-
-Alternatively, you can use a single `CLAUDE.md` or `GEMINI.md` file stored in the root of the repository.
-
-
-
-
-## Creating repository-wide custom instructions
-
-  1. In the root of your repository, create a file named `.github/copilot-instructions.md`.
-
-Create the `.github` directory if it does not already exist.
-
-  2. Add natural language instructions to the file, in Markdown format.
-
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
-
-
-
-
-## Creating path-specific custom instructions
-
-  1. Create the `.github/instructions` directory if it does not already exist.
-
-  2. Create one or more `NAME.instructions.md` files, where `NAME` indicates the purpose of the instructions. The file name must end with `.instructions.md`.
-
-  3. At the start of the file, create a frontmatter block containing the `applyTo` keyword. Use glob syntax to specify what files or directories the instructions apply to.
+* Set commands to `true` to automatically approve them
+* Set commands to `false` to always require approval
+* Use regular expressions by wrapping patterns in `/` characters
 
 For example:
-         
-         ---
-         applyTo: "app/models/**/*.rb"
-         ---
-         
 
-You can specify multiple patterns by separating them with commas. For example, to apply the instructions to all TypeScript files in the repository, you could use the following frontmatter block:
-         
-         ---
-         applyTo: "**/*.ts,**/*.tsx"
-         ---
-         
+```jsonc
+{
+  // Allow the `mkdir` command
+  "mkdir": true,
+  // Allow `git status` and commands starting with `git show`
+  "/^git (status|show\\b.*)$/": true,
 
-Glob examples:
+  // Block the `del` command
+  "del": false,
+  // Block any command containing "dangerous"
+  "/dangerous/": false
+}
+```
 
-     * `*` \- will all match all files in the current directory.
-     * `**` or `**/*` \- will all match all files in all directories.
-     * `*.py` \- will match all `.py` files in the current directory.
-     * `**/*.py` \- will recursively match all `.py` files in all directories.
-     * `src/*.py` \- will match all `.py` files in the `src` directory. For example, `src/foo.py` and `src/bar.py` but _not_ `src/foo/bar.py`.
-     * `src/**/*.py` \- will recursively match all `.py` files in the `src` directory. For example, `src/foo.py`, `src/foo/bar.py`, and `src/foo/bar/baz.py`.
-     * `**/subdir/**/*.py` \- will recursively match all `.py` files in any `subdir` directory at any depth. For example, `subdir/foo.py`, `subdir/nested/bar.py`, `parent/subdir/baz.py`, and `deep/parent/subdir/nested/qux.py`, but _not_ `foo.py` at a path that does not contain a `subdir` directory.
-  4. Optionally, to prevent the file from being used by either Copilot coding agent or Copilot code review, add the `excludeAgent` keyword to the frontmatter block. Use either `"code-review"` or `"coding-agent"`.
+By default, patterns match against individual subcommands. For a command to be auto-approved, all subcommands must match a `true` entry and must not match a `false` entry.
 
-For example, the following file will only be read by Copilot coding agent.
-         
-         ---
-         applyTo: "**"
-         excludeAgent: "code-review"
-         ---
-         
+For advanced scenarios, use object syntax with the `matchCommandLine` property to match against the full command line instead of individual subcommands.
 
-If the `excludeAgent` keyword is not included in the front matterblock, both Copilot code review and Copilot coding agent will use your instructions.
+Related settings:
 
-  5. Add your custom instructions in natural language, using Markdown format. Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
+* `setting(chat.tools.terminal.enableAutoApprove)`: permanently disable auto-approve functionality
+* `setting(chat.tools.terminal.blockDetectedFileWrites)` (experimental): detection of file writes (experimental)
+* `setting(chat.tools.terminal.ignoreDefaultAutoApproveRules)` (experimental): disable all default rules (both allow and block), giving full control over all rules.
 
+> [!CAUTION]
+> Automatically approving terminal commands provides _best effort_ protections and assumes the agent is not acting maliciously. It's important to protect yourself from prompt injection when you enable terminal auto approve, as it might be possible for some commands to slip through. Here are some examples where the detection can fall over:
+>
+> * VS Code uses PowerShell and bash tree sitter grammars to extract sub-commands, so patterns are not detected if these grammars don't detect them.
+> * VS Code uses bash grammar because there is no zsh or fish grammar, so some sub-commands are not detected.
+> * Detection of file writes is currently minimal, so it might be possible to write to files with the terminal that would not be possible by using the file editing agent tools.
 
+## Group tools with tool sets
 
+A tool set is a collection of tools that you can reference as a single entity in your prompts. Tool sets help you organize related tools and make them easier to use in a chat prompt, [prompt files](/docs/copilot/customization/prompt-files.md), and [custom chat agents](/docs/copilot/customization/custom-agents.md). Some of the built-in tools are part of predefined tool sets, such as `#edit` and `#search`.
 
-VS Code supports three types of repository custom instructions. For details of which GitHub Copilot features support these types of instructions, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization?tool=vscode#support-for-repository-custom-instructions-1).
+### Create a tool set
 
-  * **Repository-wide custom instructions** , which apply to all requests made in the context of a repository.
+To create a tool set:
 
-These are specified in a `copilot-instructions.md` file in the `.github` directory of the repository. See Creating repository-wide custom instructions.
+1. Run the **Chat: Configure Tool Sets** command from the Command Palette and select **Create new tool sets file**.
 
-  * **Path-specific custom instructions** , which apply to requests made in the context of files that match a specified path.
+    Alternatively, select **Configure Chat** in the Chat view > **Tool Sets** > **Create new tool sets file**.
 
-These are specified in one or more `NAME.instructions.md` files within the `.github/instructions` directory in the repository. See Creating path-specific custom instructions.
+    ![Screenshot showing the Chat view and Configure Chat menu, highlighting the Configure Chat button.](../images/customization/configure-chat-instructions.png)
 
-If the path you specify matches a file that Copilot is working on, and a repository-wide custom instructions file also exists, then the instructions from both files are used.
+1. Define your tool set in the `.jsonc` file that opens.
 
-  * **Agent instructions** are used by AI agents.
+    A tool set has the following structure:
 
-You can create one or more `AGENTS.md` files, stored anywhere within the repository. When Copilot is working, the nearest `AGENTS.md` file in the directory tree will take precedence. For more information, see the [openai/agents.md repository](https://github.com/openai/agents.md).
+    ```json
+    {
+        "reader": {
+            "tools": [
+                "changes",
+                "codebase",
+                "problems",
+                "usages"
+            ],
+            "description": "Tools for reading and gathering context",
+            "icon": "book"
+        }
+    }
+    ```
 
-Note
+    Tool set properties:
 
-Support of `AGENTS.md` files outside of the workspace root is currently turned off by default. For details of how to enable this feature, see [Use custom instructions in VS Code](https://code.visualstudio.com/docs/copilot/customization/custom-instructions#_use-an-agentsmd-file) in the VS Code documentation.
+    * `tools`: Array of tool names (built-in tools, MCP tools, or extension tools)
+    * `description`: Brief description displayed in the tools picker
+    * `icon`: Icon for the tool set (see [Product Icon Reference](/api/references/icons-in-labels.md))
 
+### Use a tool set
 
+Reference a tool set in your prompts by typing `#` followed by the tool set name:
 
+* `"Analyze the codebase for security issues #reader"`
+* `"Where is the DB connection string defined? #search"`
 
-## Creating repository-wide custom instructions
+In the tools picker, tool sets are available as collapsible groups of related tools. You can select or deselect entire tool sets to quickly enable or disable multiple related tools at once.
 
-  1. In the root of your repository, create a file named `.github/copilot-instructions.md`.
+## Frequently asked questions
 
-Create the `.github` directory if it does not already exist.
+### How do I know which tools are available?
 
-  2. Add natural language instructions to the file, in Markdown format.
+Type `#` in the chat input field to see a list of all available tools. You can also use the tools picker in chat to view and manage the list of active tools.
 
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
+### I'm getting an error that says "Cannot have more than 128 tools per request."
 
+A chat request can have a maximum of 128 tools enabled at a time. If you see an error about exceeding 128 tools per request:
 
+* Open the tools picker in the Chat view and deselect some tools or entire MCP servers to reduce the count.
 
+* Alternatively, enable virtual tools with the `setting(github.copilot.chat.virtualTools.threshold)` setting to automatically manage large tool sets.
 
-## Creating path-specific custom instructions
+### Why isn't the agent using Command Prompt as the terminal shell?
 
-  1. Create the `.github/instructions` directory if it does not already exist.
+The agent uses the shell you have configured as the default for the terminal, except when it's cmd. This is because [shell integration](https://code.visualstudio.com/docs/terminal/shell-integration) is not supported with Command Prompt, which means the agent has very limited visibility into what's going on inside the terminal. Instead of getting direct signals for when commands are being run or have finished running, the agent needs to rely on timeouts and watching for the terminal to idle to continue. This leads to a slow and flaky experience.
 
-  2. Create one or more `NAME.instructions.md` files, where `NAME` indicates the purpose of the instructions. The file name must end with `.instructions.md`.
+You can still configure the agent to use Command Prompt with the `setting(chat.tools.terminal.terminalProfile.windows)` setting, however this will result in an inferior experience compared to using PowerShell.
 
-  3. At the start of the file, create a frontmatter block containing the `applyTo` keyword. Use glob syntax to specify what files or directories the instructions apply to.
+```json
+"chat.tools.terminal.terminalProfile.windows": {
+  "path": "C:\\WINDOWS\\System32\\cmd.exe"
+}
+```
 
-For example:
-         
-         ---
-         applyTo: "app/models/**/*.rb"
-         ---
-         
+### Can I automatically approve all tools and terminal commands?
 
-You can specify multiple patterns by separating them with commas. For example, to apply the instructions to all TypeScript files in the repository, you could use the following frontmatter block:
-         
-         ---
-         applyTo: "**/*.ts,**/*.tsx"
-         ---
-         
+> [!CAUTION]
+> This setting disables all manual approvals, including potentially destructive actions. It removes critical security protections and makes it easier for an attacker to compromise the machine. Only enable this setting if you understand the implications. See the [Security documentation](/docs/copilot/security.md) for more details.
+>
+> To allow all tools and terminal commands to run without prompting for user confirmation, enable the `chat.tools.global.autoApprove` setting. This setting applies globally across all your workspaces!
 
-Glob examples:
+### What's the difference between tools and chat participants?
 
-     * `*` \- will all match all files in the current directory.
-     * `**` or `**/*` \- will all match all files in all directories.
-     * `*.py` \- will match all `.py` files in the current directory.
-     * `**/*.py` \- will recursively match all `.py` files in all directories.
-     * `src/*.py` \- will match all `.py` files in the `src` directory. For example, `src/foo.py` and `src/bar.py` but _not_ `src/foo/bar.py`.
-     * `src/**/*.py` \- will recursively match all `.py` files in the `src` directory. For example, `src/foo.py`, `src/foo/bar.py`, and `src/foo/bar/baz.py`.
-     * `**/subdir/**/*.py` \- will recursively match all `.py` files in any `subdir` directory at any depth. For example, `subdir/foo.py`, `subdir/nested/bar.py`, `parent/subdir/baz.py`, and `deep/parent/subdir/nested/qux.py`, but _not_ `foo.py` at a path that does not contain a `subdir` directory.
-  4. Optionally, to prevent the file from being used by either Copilot coding agent or Copilot code review, add the `excludeAgent` keyword to the frontmatter block. Use either `"code-review"` or `"coding-agent"`.
+Chat participants are specialized assistants that enable you to ask domain-specific questions in chat. Imagine a chat participant as a domain expert to whom you hand off your chat request and it takes care of the rest.
 
-For example, the following file will only be read by Copilot coding agent.
-         
-         ---
-         applyTo: "**"
-         excludeAgent: "code-review"
-         ---
-         
+Tools are invoked as part of an agent flow to contribute and perform specific tasks. You can include multiple tools in a single chat request, but only one chat participant can be active at a time.
 
-If the `excludeAgent` keyword is not included in the front matterblock, both Copilot code review and Copilot coding agent will use your instructions.
+### Can I create my own tools?
 
-  5. Add your custom instructions in natural language, using Markdown format. Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
+Yes. You can create tools in two ways:
 
+* **Develop a VS Code extension** that contributes tools using the [Language Model Tools API](/api/extension-guides/ai/tools.md)
+* **Create an MCP server** that provides tools. See the [MCP developer guide](/docs/copilot/guides/mcp-developer-guide.md)
 
+## Related resources
 
-
-Visual Studio supports a single `.github/copilot-instructions.md` custom instructions file stored in the repository.
-
-  1. In the root of your repository, create a file named `.github/copilot-instructions.md`.
-
-Create the `.github` directory if it does not already exist.
-
-  2. Add natural language instructions to the file, in Markdown format.
-
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
-
-
-
-
-Copilot on GitHub supports three types of repository custom instructions. For details of which GitHub Copilot features support these types of instructions, see [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization?tool=webui#support-for-repository-custom-instructions).
-
-  * **Repository-wide custom instructions** apply to all requests made in the context of a repository.
-
-These are specified in a `copilot-instructions.md` file in the `.github` directory of the repository. See Creating repository-wide custom instructions.
-
-  * **Path-specific custom instructions** apply to requests made in the context of files that match a specified path.
-
-These are specified in one or more `NAME.instructions.md` files within the `.github/instructions` directory in the repository. See Creating path-specific custom instructions.
-
-If the path you specify matches a file that Copilot is working on, and a repository-wide custom instructions file also exists, then the instructions from both files are used.
-
-  * **Agent instructions** are used by AI agents.
-
-You can create one or more `AGENTS.md` files, stored anywhere within the repository. When Copilot is working, the nearest `AGENTS.md` file in the directory tree will take precedence over other agent instructions files. For more information, see the [openai/agents.md repository](https://github.com/openai/agents.md).
-
-Alternatively, you can use a single `CLAUDE.md` or `GEMINI.md` file stored in the root of the repository.
-
-
-
-
-## Creating repository-wide custom instructions
-
-You can create your own custom instructions file from scratch. See Writing your own copilot-instructions.md file. Alternatively, you can ask Copilot coding agent to generate one for you.
-
-### Asking Copilot coding agent to generate a `copilot-instructions.md` file
-
-  1. Navigate to the agents tab at [github.com/copilot/agents](https://github.com/copilot/agents?ref_product=copilot&ref_type=engagement&ref_style=text).
-
-You can also reach this page by clicking the ****button next to the search bar on any page on GitHub, then selecting**Agents** from the sidebar.
-
-  2. Using the dropdown menu in the prompt field, select the repository you want Copilot to generate custom instructions for.
-
-  3. Copy the following prompt, customizing it if needed:
-         
-         Your task is to "onboard" this repository to Copilot coding agent by adding a .github/copilot-instructions.md file in the repository that contains information describing how a coding agent seeing it for the first time can work most efficiently.
-         
-         You will do this task only one time per repository and doing a good job can SIGNIFICANTLY improve the quality of the agent's work, so take your time, think carefully, and search thoroughly before writing the instructions.
-         
-         <Goals>
-         - Reduce the likelihood of a coding agent pull request getting rejected by the user due to
-         generating code that fails the continuous integration build, fails a validation pipeline, or
-         having misbehavior.
-         - Minimize bash command and build failures.
-         - Allow the agent to complete its task more quickly by minimizing the need for exploration using grep, find, str_replace_editor, and code search tools.
-         </Goals>
-         
-         <Limitations>
-         - Instructions must be no longer than 2 pages.
-         - Instructions must not be task specific.
-         </Limitations>
-         
-         <WhatToAdd>
-         
-         Add the following high level details about the codebase to reduce the amount of searching the agent has to do to understand the codebase each time:
-         <HighLevelDetails>
-         
-         - A summary of what the repository does.
-         - High level repository information, such as the size of the repo, the type of the project, the languages, frameworks, or target runtimes in use.
-         </HighLevelDetails>
-         
-         Add information about how to build and validate changes so the agent does not need to search and find it each time.
-         <BuildInstructions>
-         
-         - For each of bootstrap, build, test, run, lint, and any other scripted step, document the sequence of steps to take to run it successfully as well as the versions of any runtime or build tools used.
-         - Each command should be validated by running it to ensure that it works correctly as well as any preconditions and postconditions.
-         - Try cleaning the repo and environment and running commands in different orders and document errors and and misbehavior observed as well as any steps used to mitigate the problem.
-         - Run the tests and document the order of steps required to run the tests.
-         - Make a change to the codebase. Document any unexpected build issues as well as the workarounds.
-         - Document environment setup steps that seem optional but that you have validated are actually required.
-         - Document the time required for commands that failed due to timing out.
-         - When you find a sequence of commands that work for a particular purpose, document them in detail.
-         - Use language to indicate when something should always be done. For example: "always run npm install before building".
-         - Record any validation steps from documentation.
-         </BuildInstructions>
-         
-         List key facts about the layout and architecture of the codebase to help the agent find where to make changes with minimal searching.
-         <ProjectLayout>
-         
-         - A description of the major architectural elements of the project, including the relative paths to the main project files, the location
-         of configuration files for linting, compilation, testing, and preferences.
-         - A description of the checks run prior to check in, including any GitHub workflows, continuous integration builds, or other validation pipelines.
-         - Document the steps so that the agent can replicate these itself.
-         - Any explicit validation steps that the agent can consider to have further confidence in its changes.
-         - Dependencies that aren't obvious from the layout or file structure.
-         - Finally, fill in any remaining space with detailed lists of the following, in order of priority: the list of files in the repo root, the
-         contents of the README, the contents of any key source files, the list of files in the next level down of directories, giving priority to the more structurally important and snippets of code from key source files, such as the one containing the main method.
-         </ProjectLayout>
-         </WhatToAdd>
-         
-         <StepsToFollow>
-         - Perform a comprehensive inventory of the codebase. Search for and view:
-         - README.md, CONTRIBUTING.md, and all other documentation files.
-         - Search the codebase for build steps and indications of workarounds like 'HACK', 'TODO', etc.
-         - All scripts, particularly those pertaining to build and repo or environment setup.
-         - All build and actions pipelines.
-         - All project files.
-         - All configuration and linting files.
-         - For each file:
-         - think: are the contents or the existence of the file information that the coding agent will need to implement, build, test, validate, or demo a code change?
-         - If yes:
-            - Document the command or information in detail.
-            - Explicitly indicate which commands work and which do not and the order in which commands should be run.
-            - Document any errors encountered as well as the steps taken to workaround them.
-         - Document any other steps or information that the agent can use to reduce time spent exploring or trying and failing to run bash commands.
-         - Finally, explicitly instruct the agent to trust the instructions and only perform a search if the information in the instructions is incomplete or found to be in error.
-         </StepsToFollow>
-            - Document any errors encountered as well as the steps taken to work-around them.
-         
-         
-
-  4. Click **Send now** or press `Return`.
-
-
-
-
-Copilot will start a new session, which will appear in the list below the prompt box. Copilot will create a draft pull request, write your custom instructions, push them to the branch, then add you as a reviewer when it has finished, triggering a notification.
-
-### Writing your own `copilot-instructions.md` file
-
-  1. In the root of your repository, create a file named `.github/copilot-instructions.md`.
-
-Create the `.github` directory if it does not already exist.
-
-  2. Add natural language instructions to the file, in Markdown format.
-
-Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
-
-
-
-
-Tip
-
-The first time you create a pull request in a given repository with Copilot coding agent, Copilot will leave a comment with a link to automatically generate custom instructions for the repository.
-
-## Creating path-specific custom instructions
-
-Note
-
-Currently, on GitHub.com, path-specific custom instructions are only supported for Copilot coding agent and Copilot code review.
-
-  1. Create the `.github/instructions` directory if it does not already exist.
-
-  2. Create one or more `NAME.instructions.md` files, where `NAME` indicates the purpose of the instructions. The file name must end with `.instructions.md`.
-
-  3. At the start of the file, create a frontmatter block containing the `applyTo` keyword. Use glob syntax to specify what files or directories the instructions apply to.
-
-For example:
-         
-         ---
-         applyTo: "app/models/**/*.rb"
-         ---
-         
-
-You can specify multiple patterns by separating them with commas. For example, to apply the instructions to all TypeScript files in the repository, you could use the following frontmatter block:
-         
-         ---
-         applyTo: "**/*.ts,**/*.tsx"
-         ---
-         
-
-Glob examples:
-
-     * `*` \- will all match all files in the current directory.
-     * `**` or `**/*` \- will all match all files in all directories.
-     * `*.py` \- will match all `.py` files in the current directory.
-     * `**/*.py` \- will recursively match all `.py` files in all directories.
-     * `src/*.py` \- will match all `.py` files in the `src` directory. For example, `src/foo.py` and `src/bar.py` but _not_ `src/foo/bar.py`.
-     * `src/**/*.py` \- will recursively match all `.py` files in the `src` directory. For example, `src/foo.py`, `src/foo/bar.py`, and `src/foo/bar/baz.py`.
-     * `**/subdir/**/*.py` \- will recursively match all `.py` files in any `subdir` directory at any depth. For example, `subdir/foo.py`, `subdir/nested/bar.py`, `parent/subdir/baz.py`, and `deep/parent/subdir/nested/qux.py`, but _not_ `foo.py` at a path that does not contain a `subdir` directory.
-  4. Optionally, to prevent the file from being used by either Copilot coding agent or Copilot code review, add the `excludeAgent` keyword to the frontmatter block. Use either `"code-review"` or `"coding-agent"`.
-
-For example, the following file will only be read by Copilot coding agent.
-         
-         ---
-         applyTo: "**"
-         excludeAgent: "code-review"
-         ---
-         
-
-If the `excludeAgent` keyword is not included in the front matterblock, both Copilot code review and Copilot coding agent will use your instructions.
-
-  5. Add your custom instructions in natural language, using Markdown format. Whitespace between instructions is ignored, so the instructions can be written as a single paragraph, each on a new line, or separated by blank lines for legibility.
-
-
-
-
-Did you successfully add a custom instructions file to your repository?
-
-[Yes](https://docs.github.io/success-test/yes.html) [No](https://docs.github.io/success-test/no.html)
-
-## Repository custom instructions in use
-
-The instructions in the file(s) are available for use by Copilot as soon as you save the file(s). The complete set of instructions will be automatically added to requests that you submit to Copilot in the context of that repository. For example, they are added to the prompt you submit to Copilot Chat.
-
-In Copilot Chat ([github.com/copilot](https://github.com/copilot)), you can start a conversation that uses repository custom instructions by adding, as an attachment, the repository that contains the instructions file.
-
-Whenever repository custom instructions are used by Copilot Chat, the instructions file is added as a reference for the response that's generated. To find out whether repository custom instructions were used, expand the list of references at the top of a chat response in the Chat panel and check whether the `.github/copilot-instructions.md` file is listed.
-
-You can click the reference to open the file.
-
-Note
-
-  * Multiple types of custom instructions can apply to a request sent to Copilot. Personal instructions take the highest priority, followed by repository instructions, with organization instructions prioritized last. However, all sets of relevant instructions are still combined and provided to Copilot.
-  * Whenever possible, you should avoid providing conflicting sets of instructions. If you are concerned about response quality, you can also choose to temporarily disable repository instructions. See [Adding repository custom instructions for GitHub Copilot](/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot?tool=webui#enabling-or-disabling-repository-custom-instructions).
-
-
-
-Custom instructions are not visible in the Chat view or inline chat, but you can verify that they are being used by Copilot by looking at the References list of a response in the Chat view. If custom instructions were added to the prompt that was sent to the model, the `.github/copilot-instructions.md` file is listed as a reference. You can click the reference to open the file.
-
-Custom instructions are not visible in the Chat view or inline chat, but you can verify that they are being used by Copilot by looking at the References list of a response in the Chat view. If custom instructions were added to the prompt that was sent to the model, the `.github/copilot-instructions.md` file is listed as a reference. You can click the reference to open the file.
-
-Custom instructions are not visible in the Chat view or inline chat, but you can verify that they are being used by Copilot by looking at the References list of a response in the Chat view. If custom instructions were added to the prompt that was sent to the model, the `.github/copilot-instructions.md` file is listed as a reference. You can click the reference to open the file.
-
-Custom instructions are not visible in the Chat view or inline chat, but you can verify that they are being used by Copilot by looking at the References list of a response in the Chat view. If custom instructions were added to the prompt that was sent to the model, the `.github/copilot-instructions.md` file is listed as a reference. You can click the reference to open the file.
-
-## Further reading
-
-  * [Custom instructions](/en/copilot/tutorials/customization-library/custom-instructions)—a curated collection of examples
-
-
-
-## Enabling or disabling custom instructions for Copilot code review
-
-Custom instructions are enabled for Copilot code review by default but you can disable, or re-enable, them in the repository settings on GitHub.com. This applies to Copilot's use of custom instructions for all code reviews it performs in this repository.
-
-  1. On GitHub, navigate to the main page of the repository.
-
-  2. Under your repository name, click **Settings**. If you cannot see the "Settings" tab, select the ****dropdown menu, then click**Settings**.
-
-  3. In the "Code & automation" section of the sidebar, click **Copilot** , then **Code review**.
-
-  4. Toggle the “Use custom instructions when reviewing pull requests” option on or off.
-
-
-
-
-## Further reading
-
-  * [Custom instructions](/en/copilot/tutorials/customization-library/custom-instructions)—a curated collection of examples
-
-
-
-## Enabling or disabling repository custom instructions
-
-You can choose whether or not you want Copilot to use repository-based custom instructions.
-
-### Enabling or disabling custom instructions for Copilot Chat
-
-Custom instructions are enabled for Copilot Chat by default but you can disable, or re-enable, them at any time. This applies to your own use of Copilot Chat and does not affect other users.
-
-  1. Open the Setting editor by using the keyboard shortcut `Command`+`,` (Mac) / `Ctrl`+`,` (Linux/Windows).
-  2. Type `instruction file` in the search box.
-  3. Select or clear the checkbox under **Code Generation: Use Instruction Files**.
-
-
-
-### Enabling or disabling custom instructions for Copilot code review
-
-Custom instructions are enabled for Copilot code review by default but you can disable, or re-enable, them in the repository settings on GitHub.com. This applies to Copilot's use of custom instructions for all code reviews it performs in this repository.
-
-  1. On GitHub, navigate to the main page of the repository.
-
-  2. Under your repository name, click **Settings**. If you cannot see the "Settings" tab, select the ****dropdown menu, then click**Settings**.
-
-  3. In the "Code & automation" section of the sidebar, click **Copilot** , then **Code review**.
-
-  4. Toggle the “Use custom instructions when reviewing pull requests” option on or off.
-
-
-
-
-## Enabling or disabling repository custom instructions
-
-You can choose whether or not you want Copilot to use repository-based custom instructions.
-
-### Enabling or disabling custom instructions for Copilot Chat
-
-Custom instructions are enabled for Copilot Chat by default but you can disable, or re-enable, them at any time. This applies to your own use of Copilot Chat and does not affect other users.
-
-  1. In the Visual Studio menu bar, under **Tools** , click **Options**.
-
-  2. In the "Options" dialog, type `custom instructions` in the search box, then click **Copilot**.
-
-  3. Select or clear the checkbox for **Enable custom instructions to be loaded from .github/copilot-instructions.md files and added to requests**.
-
-
-
-
-### Enabling or disabling custom instructions for Copilot code review
-
-Custom instructions are enabled for Copilot code review by default but you can disable, or re-enable, them in the repository settings on GitHub.com. This applies to Copilot's use of custom instructions for all code reviews it performs in this repository.
-
-  1. On GitHub, navigate to the main page of the repository.
-
-  2. Under your repository name, click **Settings**. If you cannot see the "Settings" tab, select the ****dropdown menu, then click**Settings**.
-
-  3. In the "Code & automation" section of the sidebar, click **Copilot** , then **Code review**.
-
-  4. Toggle the “Use custom instructions when reviewing pull requests” option on or off.
-
-
-
-
-## Further reading
-
-  * [Custom instructions](/en/copilot/tutorials/customization-library/custom-instructions)—a curated collection of examples
-
-
-
-## Enabling and using prompt files
-
-Note
-
-  * Copilot prompt files are in public preview and subject to change. Prompt files are only available in VS Code and JetBrains IDEs. See [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization?tool=vscode#about-prompt-files).
-  * For community-contributed examples of prompt files for specific languages and scenarios, see the [Awesome GitHub Copilot Customizations](https://github.com/github/awesome-copilot/blob/main/docs/README.prompts.md) repository.
-
-
-
-Prompt files let you build and share reusable prompt instructions with additional context. A prompt file is a Markdown file, stored in your workspace, that mimics the existing format of writing prompts in Copilot Chat (for example, `Rewrite #file:x.ts`). You can have multiple prompt files in your workspace, each of which defines a prompt for a different purpose.
-
-### Enabling prompt files
-
-To enable prompt files, configure the workspace settings.
-
-  1. Open the command palette by pressing `Ctrl`+`Shift`+`P` (Windows/Linux) / `Command`+`Shift`+`P` (Mac).
-  2. Type "Open Workspace Settings (JSON)" and select the option that's displayed.
-  3. In the `settings.json` file, add `"chat.promptFiles": true` to enable the `.github/prompts` folder as the location for prompt files. This folder will be created if it does not already exist.
-
-
-
-### Creating prompt files
-
-  1. Open the command palette by pressing `Ctrl`+`Shift`+`P` (Windows/Linux) / `Command`+`Shift`+`P` (Mac).
-
-  2. Type "prompt" and select **Chat: Create Prompt**.
-
-  3. Enter a name for the prompt file, excluding the `.prompt.md` file name extension. The name can contain alphanumeric characters and spaces and should describe the purpose of the prompt information the file will contain.
-
-  4. Write the prompt instructions, using Markdown formatting.
-
-You can reference other files in the workspace by using Markdown links—for example, `[index](../../web/index.ts)`—or by using the `#file:../../web/index.ts` syntax. Paths are relative to the prompt file. Referencing other files allows you to provide additional context, such as API specifications or product documentation.
-
-
-
-
-### Using prompt files
-
-  1. At the bottom of the Copilot Chat view, click the **Attach context** icon ().
-
-  2. In the dropdown menu, click **Prompt...** and choose the prompt file you want to use.
-
-  3. Optionally, attach additional files, including prompt files, to provide more context.
-
-  4. Optionally, type additional information in the chat prompt box.
-
-Whether you need to do this or not depends on the contents of the prompt you are using.
-
-  5. Submit the chat prompt.
-
-
-
-
-For more information about prompt files, see [Use prompt files in Visual Studio Code](https://code.visualstudio.com/docs/copilot/customization/prompt-files) in the Visual Studio Code documentation.
-
-## Further reading
-
-  * [Customization library](/en/copilot/tutorials/customization-library)—a curated collection of examples
-
-
-
-## Using prompt files
-
-Note
-
-  * Copilot prompt files are in public preview and subject to change. Prompt files are only available in VS Code and JetBrains IDEs. See [About customizing GitHub Copilot responses](/en/copilot/concepts/prompting/response-customization?tool=vscode#about-prompt-files).
-  * For community-contributed examples of prompt files for specific languages and scenarios, see the [Awesome GitHub Copilot Customizations](https://github.com/github/awesome-copilot/blob/main/docs/README.prompts.md) repository.
-
-
-
-Prompt files let you build and share reusable prompt instructions with additional context. A prompt file is a Markdown file, stored in your workspace, that mimics the existing format of writing prompts in Copilot Chat (for example, `Rewrite #file:x.ts`). You can have multiple prompt files in your workspace, each of which defines a prompt for a different purpose.
-
-When writing prompt instructions, you can reference other files in the workspace by using Markdown links—for example, `[index](../../web/index.ts)`—or by using the `#file:../../web/index.ts` syntax. Paths are relative to the prompt file. Referencing other files allows you to provide additional context, such as API specifications or product documentation.
-
-Once prompt files are saved, their instructions will apply to the current workspace in JetBrains IDEs that you open with Copilot enabled.
-
-### Creating prompt files using the command line
-
-  1. Create the `.github/prompts` directory if it doesn't already exist in your workspace. This directory will be the location for your prompt files.
-  2. Create a prompt file in the `.github/prompts` directory. The prompt file name can contain alphanumeric characters and spaces and should describe the purpose of the prompt information the file will contain. The file name must end with the `.prompt.md` file name extension, for example `TESTPROMPT.prompt.md`.
-  3. Write the prompt instructions using Markdown formatting, and save the file.
-
-
-
-### Creating prompt files using the settings page
-
-  1. In your JetBrains IDE, click the **File** menu (Windows), or the name of the application in the menu bar (macOS), then click **Settings**.
-  2. Under **Tools** , under **GitHub Copilot** , click **Edit Settings**.
-  3. Under "Settings Categories", click **Customizations**.
-  4. Under "Prompt Files", click **Workspace** , to create a prompt file in your workspace.
-  5. Enter a name for the prompt file, excluding the `.prompt.md` file name extension. The prompt file name can contain alphanumeric characters and spaces and should describe the purpose of the prompt information the file will contain.
-  6. Click **Ok** to save the prompt file name.
-  7. Write the prompt instructions using Markdown formatting, and save the file.
-
-
-
-### Using prompt files
-
-  1. In the chat input box, type `/` followed by the name of the prompt file. For example, `/TESTPROMPT`.
-
-  2. Optionally, attach additional files, to provide more context.
-
-  3. Optionally, type additional information in the chat prompt box.
-
-Whether you need to do this or not depends on the contents of the prompt you are using.
-
-  4. Submit the chat prompt.
-
-
-
-
-## Further reading
-
-  * [Customization library](/en/copilot/tutorials/customization-library)
-
-
-
-## Further reading
-
-  * [Custom instructions](/en/copilot/tutorials/customization-library/custom-instructions)—a curated collection of examples
-
-
-
-## Further reading
-
-  * [Using custom instructions to unlock the power of Copilot code review](/en/copilot/tutorials/use-custom-instructions)
-  * [Custom instructions](/en/copilot/tutorials/customization-library/custom-instructions)—a curated collection of examples
+* [Chat tools reference](/docs/copilot/reference/copilot-vscode-features.md#chat-tools)
+* [Security considerations for using AI in VS Code](/docs/copilot/security.md)
