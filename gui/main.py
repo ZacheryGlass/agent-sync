@@ -22,13 +22,21 @@ class SyncApp:
         self.log_queue = queue.Queue()
         self.conflict_queue = queue.Queue()
         self.response_queue = queue.Queue()
-        self.sync_thread: Optional[threading.Thread] = None
         
-        self.setup_ui()
-        
-        # Start timers to process queues
-        ui.timer(0.1, self.process_logs)
-        ui.timer(0.1, self.process_conflicts)
+        # UI Elements (to be initialized in setup_ui)
+        self.source_dir = None
+        self.target_dir = None
+        self.source_format = None
+        self.target_format = None
+        self.config_type = None
+        self.direction = None
+        self.check_force = None
+        self.check_verbose = None
+        self.check_hint = None
+        self.check_handoffs = None
+        self.log_area = None
+        self.conflict_dialog = None
+        self.conflict_details = None
 
     def setup_ui(self):
         with ui.header().classes('bg-primary text-white'):
@@ -81,15 +89,11 @@ class SyncApp:
                 ui.button('Use Target', on_click=lambda: self.resolve_conflict('target_to_source'))
                 ui.button('Skip', on_click=lambda: self.resolve_conflict(None)).classes('bg-gray-500')
 
+        # Start timers
+        ui.timer(0.1, self.process_logs)
+        ui.timer(0.1, self.process_conflicts)
+
     async def pick_dir(self, input_element):
-        # Simple implementation: ask user to paste path if picker not available
-        # In a real local app, we could try to implement a server-side tree walker
-        # For now, we'll rely on copy-paste or manual entry as a fallback, 
-        # but let's try to do a simple path completion or something.
-        # Actually, for this prototype, manual entry is acceptable if "folder picker" is hard.
-        # But let's try to mock a picker or use a library if possible.
-        # Since we are running locally, we can list dirs.
-        
         path = input_element.value or '.'
         result = await LocalFilePicker(directory=path, show_hidden_files=True)
         if result:
@@ -100,7 +104,6 @@ class SyncApp:
 
     def conflict_resolver_callback(self, pair: FilePair):
         self.conflict_queue.put(pair)
-        # Block until response
         return self.response_queue.get()
 
     def process_logs(self):
@@ -114,12 +117,7 @@ class SyncApp:
             self.show_conflict_dialog(pair)
 
     def show_conflict_dialog(self, pair: FilePair):
-        details = f"""
-**File:** `{pair.base_name}`
-
-*   **Source:** `{pair.source_path}`
-*   **Target:** `{pair.target_path}`
-        """
+        details = f"**File:** `{pair.base_name}`\n\n* **Source:** `{pair.source_path}`\n* **Target:** `{pair.target_path}`"
         self.conflict_details.set_content(details)
         self.conflict_dialog.open()
 
@@ -131,123 +129,86 @@ class SyncApp:
         if not self.source_dir.value or not self.target_dir.value:
             ui.notify('Please specify source and target directories.', type='negative')
             return
-
         self.log_area.clear()
-        
-        # Disable buttons?
-        
         threading.Thread(target=self._sync_logic, args=(dry_run,), daemon=True).start()
 
     def _sync_logic(self, dry_run):
         try:
             source_dir = Path(self.source_dir.value).expanduser().resolve()
             target_dir = Path(self.target_dir.value).expanduser().resolve()
-            
             if not source_dir.exists():
                 self.logger_callback(f"Error: Source directory does not exist: {source_dir}")
                 return
 
-            # Setup Registry
             registry = FormatRegistry()
             registry.register(ClaudeAdapter())
             registry.register(CopilotAdapter())
+            state_manager = SyncStateManager()
 
-            # Setup State Manager
-            state_manager = SyncStateManager() # Default state file
-
-            # Conversion Options
             conversion_options = {}
-            if self.check_hint.value:
-                conversion_options['add_argument_hint'] = True
-            if self.check_handoffs.value:
-                conversion_options['add_handoffs'] = True
+            if self.check_hint.value: conversion_options['add_argument_hint'] = True
+            if self.check_handoffs.value: conversion_options['add_handoffs'] = True
 
             orchestrator = UniversalSyncOrchestrator(
-                source_dir=source_dir,
-                target_dir=target_dir,
-                source_format=self.source_format.value,
-                target_format=self.target_format.value,
+                source_dir=source_dir, target_dir=target_dir,
+                source_format=self.source_format.value, target_format=self.target_format.value,
                 config_type=CONFIG_TYPE_MAP[self.config_type.value],
-                format_registry=registry,
-                state_manager=state_manager,
-                direction=self.direction.value,
-                dry_run=dry_run,
-                force=self.check_force.value,
-                verbose=self.check_verbose.value,
+                format_registry=registry, state_manager=state_manager,
+                direction=self.direction.value, dry_run=dry_run,
+                force=self.check_force.value, verbose=self.check_verbose.value,
                 conversion_options=conversion_options,
-                logger=self.logger_callback,
-                conflict_resolver=self.conflict_resolver_callback
+                logger=self.logger_callback, conflict_resolver=self.conflict_resolver_callback
             )
-
             orchestrator.sync()
-            
-            if dry_run:
-                self.logger_callback("Dry run completed.")
-            else:
-                self.logger_callback("Sync completed.")
-
+            self.logger_callback("Dry run completed." if dry_run else "Sync completed.")
         except Exception as e:
             self.logger_callback(f"Error: {e}")
-            import traceback
-            self.logger_callback(traceback.format_exc())
 
-# Simple Local File Picker implementation
 class LocalFilePicker(ui.dialog):
-    def __init__(self, directory: str, show_hidden_files: bool = False, upper_limit: Optional[str] = None):
+    def __init__(self, directory: str, show_hidden_files: bool = False):
         super().__init__()
         self.path = Path(directory).expanduser()
-        if not self.path.exists():
-            self.path = Path('.')
+        if not self.path.exists(): self.path = Path('.')
         self.show_hidden_files = show_hidden_files
-        self.upper_limit = Path(upper_limit).expanduser() if upper_limit else None
-        
         with self, ui.card():
             self.grid = ui.aggrid({
                 'columnDefs': [{'field': 'name', 'headerName': 'File', 'sortable': True}],
                 'rowSelection': 'single',
             }, html_columns=[0]).classes('w-96').on('cellDoubleClicked', self.handle_double_click)
-            
             with ui.row().classes('w-full justify-end'):
                 ui.button('Cancel', on_click=self.close).props('outline')
                 ui.button('Ok', on_click=self._handle_ok)
-                
         self.update_grid()
 
     def update_grid(self):
         paths = list(self.path.glob('*'))
-        if not self.show_hidden_files:
-            paths = [p for p in paths if not p.name.startswith('.')]
-        
+        if not self.show_hidden_files: paths = [p for p in paths if not p.name.startswith('.')] # noqa: E713
         paths.sort(key=lambda p: (not p.is_dir(), p.name.lower()))
-        
         rows = []
-        # Add parent directory
-        if self.path.parent != self.path and (not self.upper_limit or self.path != self.upper_limit):
+        if self.path.parent != self.path:
             rows.append({'name': '📁 ..', 'path': str(self.path.parent), 'is_dir': True})
-            
         for p in paths:
-            if p.is_dir():
-                rows.append({'name': f'📁 {p.name}', 'path': str(p), 'is_dir': True})
-            # Filter out files, we only want directories for this use case
-            # else:
-            #     rows.append({'name': f'📄 {p.name}', 'path': str(p), 'is_dir': False})
-                
+            if p.is_dir(): rows.append({'name': f'📁 {p.name}', 'path': str(p), 'is_dir': True})
         self.grid.options['rowData'] = rows
         self.grid.update()
 
     def handle_double_click(self, e):
-        path = e.args['data']['path']
         if e.args['data']['is_dir']:
-            self.path = Path(path)
+            self.path = Path(e.args['data']['path'])
             self.update_grid()
-            
+
     def _handle_ok(self):
         self.submit([str(self.path)])
 
+# Use a decorator to explicitly define the root page
+@ui.page('/')
+def main_page():
+    app_instance = SyncApp()
+    app_instance.setup_ui()
 
 def start():
-    app = SyncApp()
-    ui.run(title='Coding Agent Settings Sync', reload=False)
+    # reload=False is critical to avoid re-running the script in complex entry points
+    ui.run(title='Coding Agent Settings Sync', reload=False, port=8080, show=False)
 
 if __name__ in {"__main__", "__mp_main__"}:
     start()

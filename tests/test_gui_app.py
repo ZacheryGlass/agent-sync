@@ -8,6 +8,7 @@ def test_sync_app_init(mock_ui):
     app = SyncApp()
     assert app.log_queue is not None
     assert app.conflict_queue is not None
+    app.setup_ui()
     # Check if UI setup was called
     mock_ui.header.assert_called()
     mock_ui.timer.assert_called()
@@ -15,6 +16,7 @@ def test_sync_app_init(mock_ui):
 @patch('gui.main.ui')
 def test_sync_app_logging(mock_ui):
     app = SyncApp()
+    app.setup_ui() # Initialize UI elements
     app.log_area = MagicMock()
     
     app.logger_callback("Test Log")
@@ -29,6 +31,7 @@ def test_sync_app_logging(mock_ui):
 @patch('gui.main.ui')
 def test_sync_app_conflict(mock_ui):
     app = SyncApp()
+    app.setup_ui() # Initialize UI elements
     app.conflict_dialog = MagicMock()
     app.conflict_details = MagicMock()
     
