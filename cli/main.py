@@ -160,6 +160,12 @@ Examples:
         help='[Copilot] Add handoffs placeholder when converting to Copilot'
     )
 
+    parser.add_argument(
+        '--gui',
+        action='store_true',
+        help='Launch the graphical user interface'
+    )
+
     return parser
 
 
@@ -298,6 +304,25 @@ def main(argv: Optional[list] = None):
     Returns:
         Exit code (0 for success, 1 for error)
     """
+    if argv is None:
+        argv = sys.argv[1:]
+
+    # Check for GUI launch conditions:
+    # 1. Explicit --gui flag
+    # 2. No arguments provided (default to GUI)
+    if '--gui' in argv or not argv:
+        try:
+            from gui.main import start as start_gui
+            start_gui()
+            return 0
+        except ImportError as e:
+            print(f"Error: Could not import GUI: {e}", file=sys.stderr)
+            print("Ensure nicegui is installed: pip install nicegui", file=sys.stderr)
+            return 1
+        except Exception as e:
+            print(f"Error launching GUI: {e}", file=sys.stderr)
+            return 1
+
     parser = create_parser()
     args = parser.parse_args(argv)
 

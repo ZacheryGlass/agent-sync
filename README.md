@@ -23,6 +23,18 @@ pip install -r requirements.txt
 
 The tool is run via the `cli.main` module.
 
+### GUI Mode
+
+Launch the graphical user interface by running the tool without arguments or with the `--gui` flag:
+
+```bash
+# Launch GUI (default if no args)
+python -m cli.main
+
+# Or explicitly
+python -m cli.main --gui
+```
+
 ### Basic Bidirectional Agent Sync
 
 ```bash
@@ -113,6 +125,7 @@ python -m cli.main \
 | `--state-file` | No | `~/.agent_sync_state.json` | Custom path for state file |
 | `--add-argument-hint` | No | `false` | Add `argument-hint` field (Claude→Copilot only) |
 | `--add-handoffs` | No | `false` | Add `handoffs` placeholder (Claude→Copilot only) |
+| `--gui` | No | `false` | Launch the graphical user interface |
 
 ## How It Works
 

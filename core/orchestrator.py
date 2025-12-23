@@ -83,7 +83,9 @@ class UniversalSyncOrchestrator:
                  dry_run: bool = False,
                  force: bool = False,
                  verbose: bool = False,
-                 conversion_options: Optional[Dict[str, Any]] = None):
+                 conversion_options: Optional[Dict[str, Any]] = None,
+                 logger: Optional[Any] = None,
+                 conflict_resolver: Optional[Any] = None):
         """
         Initialize sync orchestrator.
 
@@ -100,6 +102,8 @@ class UniversalSyncOrchestrator:
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
+            logger: Callback for logging output (default: print)
+            conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
         """
         self.source_dir = source_dir
         self.target_dir = target_dir
@@ -113,6 +117,8 @@ class UniversalSyncOrchestrator:
         self.force = force
         self.verbose = verbose
         self.conversion_options = conversion_options or {}
+        self.logger = logger or print
+        self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver
 
         # Get adapters from registry
         self.source_adapter = format_registry.get_adapter(source_format)
@@ -156,13 +162,13 @@ class UniversalSyncOrchestrator:
         self.log(f"  Target:  {self.target_dir} ({self.target_format})")
         if self.dry_run:
             self.log("  Mode: DRY RUN (no changes will be made)")
-        print()
+        self.logger()
 
         # Discover file pairs
         pairs = self._discover_file_pairs()
 
         if not pairs:
-            print("No files found in either directory.")
+            self.logger("No files found in either directory.")
             self._print_summary()
             return
 
@@ -172,7 +178,7 @@ class UniversalSyncOrchestrator:
 
             if action == 'skip':
                 if self.verbose:
-                    print(f"  Skip: {pair.base_name} (no changes)")
+                    self.logger(f"  Skip: {pair.base_name} (no changes)")
                 self.stats['skipped'] += 1
                 continue
 
@@ -180,7 +186,7 @@ class UniversalSyncOrchestrator:
                 self.stats['conflicts'] += 1
                 resolved_action = self._resolve_conflict(pair)
                 if not resolved_action:
-                    print(f"  Skip: {pair.base_name} (conflict skipped)")
+                    self.logger(f"  Skip: {pair.base_name} (conflict skipped)")
                     self.stats['skipped'] += 1
                     continue
                 action = resolved_action
@@ -193,7 +199,7 @@ class UniversalSyncOrchestrator:
                 'delete_source': f"Delete from {self.source_format}"
             }
             prefix = "[DRY-RUN] " if self.dry_run else ""
-            print(f"{prefix}{pair.base_name}: {action_display.get(action, action)}")
+            self.logger(f"{prefix}{pair.base_name}: {action_display.get(action, action)}")
 
             # Execute the sync action
             self._execute_sync_action(pair, action)
@@ -337,26 +343,8 @@ class UniversalSyncOrchestrator:
 
         return 'skip'  # No changes
 
-    def _resolve_conflict(self, pair: FilePair) -> Optional[str]:
-        """
-        Resolve sync conflict interactively or automatically.
-
-        Args:
-            pair: FilePair with conflict
-
-        Returns:
-            Resolved action or None to skip
-        """
-        if self.force:
-            # Use newest file
-            if pair.source_mtime > pair.target_mtime:
-                self.log(f"  Conflict resolved (--force): Using source (newer)")
-                return 'source_to_target'
-            else:
-                self.log(f"  Conflict resolved (--force): Using target (newer)")
-                return 'target_to_source'
-
-        # Interactive mode
+    def _default_cli_conflict_resolver(self, pair: FilePair) -> Optional[str]:
+        """Default interactive CLI conflict resolver."""
         print(f"\nCONFLICT: Both files modified for '{pair.base_name}'")
         print(f"  Source: {pair.source_path}")
         print(f"    Modified: {datetime.fromtimestamp(pair.source_mtime)}")
@@ -376,6 +364,27 @@ class UniversalSyncOrchestrator:
             elif choice == '3':
                 return None
             print("Invalid choice. Enter 1, 2, or 3.")
+
+    def _resolve_conflict(self, pair: FilePair) -> Optional[str]:
+        """
+        Resolve sync conflict interactively or automatically.
+
+        Args:
+            pair: FilePair with conflict
+
+        Returns:
+            Resolved action or None to skip
+        """
+        if self.force:
+            # Use newest file
+            if pair.source_mtime > pair.target_mtime:
+                self.log(f"  Conflict resolved (--force): Using source (newer)")
+                return 'source_to_target'
+            else:
+                self.log(f"  Conflict resolved (--force): Using target (newer)")
+                return 'target_to_source'
+
+        return self.conflict_resolver(pair)
 
     def _execute_sync_action(self, pair: FilePair, action: str):
         """
@@ -473,29 +482,29 @@ class UniversalSyncOrchestrator:
                 self.stats['deletions'] += 1
 
         except Exception as e:
-            print(f"  Error syncing {pair.base_name}: {e}")
+            self.logger(f"  Error syncing {pair.base_name}: {e}")
             self.stats['errors'] += 1
 
     def log(self, message: str):
         """Print message if verbose mode enabled."""
         if self.verbose:
-            print(message)
+            self.logger(message)
 
     def _print_summary(self):
         """Print sync statistics summary."""
-        print()
-        print("=" * 60)
-        print("Summary:")
-        print(f"  {self.source_format} -> {self.target_format}: {self.stats['source_to_target']}")
-        print(f"  {self.target_format} -> {self.source_format}: {self.stats['target_to_source']}")
-        print(f"  Deletions:  {self.stats['deletions']}")
-        print(f"  Conflicts:  {self.stats['conflicts']}")
-        print(f"  Skipped:    {self.stats['skipped']}")
-        print(f"  Errors:     {self.stats['errors']}")
-        print("=" * 60)
+        self.logger()
+        self.logger("=" * 60)
+        self.logger("Summary:")
+        self.logger(f"  {self.source_format} -> {self.target_format}: {self.stats['source_to_target']}")
+        self.logger(f"  {self.target_format} -> {self.source_format}: {self.stats['target_to_source']}")
+        self.logger(f"  Deletions:  {self.stats['deletions']}")
+        self.logger(f"  Conflicts:  {self.stats['conflicts']}")
+        self.logger(f"  Skipped:    {self.stats['skipped']}")
+        self.logger(f"  Errors:     {self.stats['errors']}")
+        self.logger("=" * 60)
         if self.dry_run:
-            print()
-            print("This was a dry run. Use without --dry-run to apply changes.")
+            self.logger()
+            self.logger("This was a dry run. Use without --dry-run to apply changes.")
 
     def _extract_base_name(self, file_path: Path, extension: str) -> str:
         """
