@@ -1,7 +1,6 @@
-name: Build and Release
+name: Release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*'
@@ -23,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install .
         pip install pyinstaller
         
     - name: Build with PyInstaller
@@ -50,7 +49,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install .
         pip install pyinstaller
         
     - name: Build with PyInstaller
@@ -64,30 +63,74 @@ jobs:
         name: agent-sync-windows.exe
         path: dist/agent-sync-windows.exe
 
-  publish:
-    needs: [build-linux, build-windows]
+  build-pypi:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for setuptools_scm
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build
+        
+    - name: Build Package
+      run: python -m build
+      
+    - name: Upload Package Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: pypi-dist
+        path: dist/
+
+  publish-github:
+    needs: [build-linux, build-windows, build-pypi]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     
-    - name: Download Linux Artifact
+    - name: Download Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: agent-sync-linux
-        path: dist
-        
-    - name: Download Windows Artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: agent-sync-windows.exe
-        path: dist
+        path: artifacts
         
     - name: Create Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        # Flatten artifacts
+        mkdir dist
+        cp artifacts/agent-sync-linux/agent-sync-linux dist/
+        cp artifacts/agent-sync-windows.exe/agent-sync-windows.exe dist/
+        cp artifacts/pypi-dist/* dist/
+        
         gh release create ${{ github.ref_name }} \
-          dist/agent-sync-linux \
-          dist/agent-sync-windows.exe \
+          dist/* \
           --generate-notes \
           --title "Release ${{ github.ref_name }}"
+
+  publish-pypi:
+    needs: [build-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # For Trusted Publishing
+    steps:
+    - name: Download Package Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: pypi-dist
+        path: dist/
+        
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        # User needs to set PYPI_API_TOKEN secret in repo settings
+        # OR use Trusted Publishing (OIDC) which requires no password config here
+        # We'll use the secret if provided, otherwise it might rely on OIDC
+        password: ${{ secrets.PYPI_API_TOKEN }}
