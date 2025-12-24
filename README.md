@@ -13,6 +13,36 @@ Bidirectional synchronization tool for custom agents and settings between Claude
 - ✅ **Field mapping** - Intelligent mapping of format-specific fields
 - ✅ **Dry-run mode** - Preview changes before applying
 
+## Building Standalone Executable
+
+You can package the application as a standalone executable (no Python installation required) for Linux or Windows.
+
+### Using GitHub Actions (Recommended)
+
+This repository includes a GitHub Action to automatically build both Linux and Windows binaries.
+1. Go to the "Actions" tab in the repository.
+2. Select "Build Standalone Executable".
+3. Click "Run workflow".
+4. Download the artifacts from the completed run.
+
+### Building Manually
+
+**Linux:**
+Run the provided build script:
+```bash
+./scripts/build_executable.sh
+```
+The executable will be located at `dist/agent-sync`.
+
+**Windows:**
+Run the following command in a terminal (PowerShell or Command Prompt) with Python installed:
+```bash
+pip install -r requirements.txt
+pip install pyinstaller
+pyinstaller --clean agent-sync.spec
+```
+The executable will be located at `dist/agent-sync.exe`.
+
 ## Requirements
 
 ```bash
