@@ -47,7 +47,7 @@ def test_claude_cli_loads_converted_agent(setup_claude_env, tmp_path):
     state_manager = SyncStateManager(tmp_path / "state.json")
     
     # Source: The official Copilot fixture
-    source_file = Path("tests/fixtures/copilot/official-pr-reviewer.agent.md")
+    source_file = Path("tests/fixtures/copilot/agents/official-pr-reviewer.agent.md")
     if not source_file.exists():
         pytest.skip("Source fixture not found")
         

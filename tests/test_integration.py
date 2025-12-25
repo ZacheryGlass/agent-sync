@@ -258,8 +258,8 @@ Updated instructions.
         """Test conversion of 'official' Claude agent example to Copilot format."""
         # Arrange: Load official fixture
         fixtures_dir = Path("tests/fixtures")
-        claude_source = fixtures_dir / "claude" / "official-code-reviewer.md"
-        expected_copilot = fixtures_dir / "copilot" / "official-code-reviewer.agent.md"
+        claude_source = fixtures_dir / "claude" / "agents" / "official-code-reviewer.md"
+        expected_copilot = fixtures_dir / "copilot" / "agents" / "official-code-reviewer.agent.md"
         
         # Copy to source directory
         import shutil
@@ -363,8 +363,8 @@ class TestCopilotToClaudeSync:
         """Test conversion of 'official' Copilot agent example to Claude format."""
         # Arrange: Load official fixture
         fixtures_dir = Path("tests/fixtures")
-        copilot_source = fixtures_dir / "copilot" / "official-pr-reviewer.agent.md"
-        expected_claude = fixtures_dir / "claude" / "official-pr-reviewer.md"
+        copilot_source = fixtures_dir / "copilot" / "agents" / "official-pr-reviewer.agent.md"
+        expected_claude = fixtures_dir / "claude" / "agents" / "official-pr-reviewer.md"
         
         # Copy to source directory
         import shutil

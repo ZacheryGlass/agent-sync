@@ -175,7 +175,7 @@ Full agent instructions.
 
     def test_to_canonical_from_file(self, adapter, tmp_path):
         """Test read() method with file."""
-        fixture_path = Path("tests/fixtures/claude/simple-agent.md")
+        fixture_path = Path("tests/fixtures/claude/agents/simple-agent.md")
         agent = adapter.read(fixture_path, ConfigType.AGENT)
         assert agent.name == "simple-agent"
         assert agent.description == "A simple test agent for unit testing"
@@ -372,7 +372,7 @@ Instructions.
 
     def test_multiline_instructions(self, adapter):
         """Test preservation of multiline markdown instructions."""
-        fixture_path = Path("tests/fixtures/claude/edge-cases/multiline-instructions.md")
+        fixture_path = Path("tests/fixtures/claude/agents/edge-cases/multiline-instructions.md")
         agent = adapter.read(fixture_path, ConfigType.AGENT)
 
         assert "# Complex Instructions" in agent.instructions
@@ -382,7 +382,7 @@ Instructions.
 
     def test_tools_with_special_spacing(self, adapter):
         """Test tool parsing with various spacing patterns."""
-        fixture_path = Path("tests/fixtures/claude/edge-cases/whitespace.md")
+        fixture_path = Path("tests/fixtures/claude/agents/edge-cases/whitespace.md")
         agent = adapter.read(fixture_path, ConfigType.AGENT)
 
         assert agent.tools == ["Read", "Grep", "Glob", "Bash"]
