@@ -87,8 +87,19 @@ python -m cli.main \
 
 ### Permission Sync
 
-Sync Claude permissions (`settings.json`) to Copilot (placeholder files):
+Sync permission configurations between VS Code (Copilot) and Claude Code formats:
 
+**VS Code (Copilot) → Claude:**
+```bash
+python -m cli.main \
+  --source-dir ~/.vscode \
+  --target-dir ~/.claude \
+  --source-format copilot \
+  --target-format claude \
+  --config-type permission
+```
+
+**Claude → VS Code (Copilot):**
 ```bash
 python -m cli.main \
   --source-dir ~/.claude \
@@ -97,6 +108,18 @@ python -m cli.main \
   --target-format copilot \
   --config-type permission
 ```
+
+**Bidirectional sync:**
+```bash
+python -m cli.main \
+  --source-dir ~/.claude \
+  --target-dir ~/.vscode \
+  --source-format claude \
+  --target-format copilot \
+  --config-type permission
+```
+
+See [Permission Conversion Details](#permission-conversion) below for more information.
 
 ### One-Time Migration
 
@@ -211,6 +234,175 @@ Files are matched by base name:
 | `handoffs` | - | **Dropped** |
 | `target` | - | **Dropped** |
 | `mcp-servers` | - | **Dropped** |
+
+## Permission Conversion
+
+The tool supports bidirectional conversion of permission configurations between VS Code (Copilot) and Claude Code formats.
+
+### Permission Format Overview
+
+**VS Code (Copilot) Format:**
+```json
+{
+  "chat.tools.terminal.autoApprove": {
+    "mkdir": true,
+    "/^git status$/": true,
+    "rm": false,
+    "/dangerous/": false
+  },
+  "chat.tools.urls.autoApprove": {
+    "https://*.github.com/*": true,
+    "https://untrusted.com": false
+  }
+}
+```
+
+**Claude Code Format:**
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(/^git status$/)",
+      "WebFetch(domain:*.github.com)"
+    ],
+    "ask": [
+      "Bash(rm:*)",
+      "Bash(/dangerous/)",
+      "WebFetch(domain:untrusted.com)"
+    ],
+    "deny": []
+  }
+}
+```
+
+### Conversion Rules
+
+#### VS Code → Claude
+
+| VS Code Setting | Claude Category | Description |
+|-----------------|-----------------|-------------|
+| `"command": true` | `allow` | Auto-approve (no prompt) |
+| `"command": false` | `ask` | Require approval before execution |
+| `/regex/: true` | `allow` | Regex patterns preserved |
+| `/regex/: false` | `ask` | Regex patterns preserved |
+| Terminal commands | `Bash()` permissions | Simple strings become `Bash(cmd:*)`, regex stays as-is |
+| URL patterns | `WebFetch(domain:...)` | Domain extracted from URL |
+
+#### Claude → VS Code
+
+| Claude Category | VS Code Setting | Notes |
+|-----------------|-----------------|-------|
+| `allow` | `true` | Auto-approve |
+| `ask` | `false` | Require approval |
+| `deny` | `false` (with warning) | **Lossy conversion** - VS Code doesn't support blocking entirely |
+| `Bash()` rules | Terminal commands | Pattern extracted from `Bash(pattern)` |
+| `WebFetch()` rules | URL patterns | Domain becomes `https://domain/*` |
+
+### Important Notes
+
+#### 1. Lossy Conversions
+
+When converting Claude `deny` rules to VS Code format, they become `false` (require approval) instead of blocking entirely. This is because VS Code doesn't have a true "deny" concept.
+
+**Example:**
+```json
+// Claude
+{
+  "permissions": {
+    "deny": ["Bash(rm -rf:*)"]
+  }
+}
+
+// Converts to VS Code as:
+{
+  "chat.tools.terminal.autoApprove": {
+    "rm -rf": false  // Require approval, not blocked
+  }
+}
+```
+
+The tool generates warnings for these lossy conversions.
+
+#### 2. Regex Pattern Handling
+
+Regex patterns are preserved as-is during conversion:
+
+```json
+// VS Code
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^git (status|show\\b.*)$/": true
+  }
+}
+
+// Converts to Claude as:
+{
+  "permissions": {
+    "allow": ["Bash(/^git (status|show\\b.*)$/)"]
+  }
+}
+```
+
+#### 3. URL Split Approval
+
+VS Code supports separate approval for request vs response (`approveRequest` / `approveResponse`). Claude doesn't support this granularity, so split approvals map to `ask` (safer) with original details stored in metadata.
+
+**Example:**
+```json
+// VS Code
+{
+  "chat.tools.urls.autoApprove": {
+    "https://api.example.com/*": {
+      "approveRequest": true,
+      "approveResponse": false
+    }
+  }
+}
+
+// Converts to Claude as:
+{
+  "permissions": {
+    "ask": ["WebFetch(domain:api.example.com)"]
+  }
+  // Metadata stores original split approval details
+}
+```
+
+#### 4. Round-Trip Fidelity
+
+For VS Code → Claude → VS Code conversions (without `deny` rules), perfect fidelity is maintained:
+
+```bash
+# Convert VS Code → Claude
+python -m cli.main --convert-file vscode-settings.json --target-format claude
+
+# Convert back Claude → VS Code
+python -m cli.main --convert-file claude-settings.json --target-format copilot
+
+# Result: Identical to original vscode-settings.json
+```
+
+### Examples
+
+See `examples/permission_conversion_example.py` for complete working examples of:
+- VS Code → Claude conversion
+- Claude → VS Code conversion
+- Lossy conversion tracking
+- Round-trip conversion
+- Complex URL permissions
+
+Run the examples:
+```bash
+PYTHONPATH=/workspaces/coding-agent-settings-sync python examples/permission_conversion_example.py
+```
+
+### Conversion Warnings
+
+The tool tracks and reports conversion warnings. Examples of warnings:
+- Lossy conversions (Claude `deny` → VS Code `false`)
+- Unsupported features (split URL approvals)
+- Pattern transformations
 
 ## Troubleshooting
 

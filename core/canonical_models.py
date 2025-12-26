@@ -106,6 +106,23 @@ class CanonicalPermission:
     source_format: Optional[str] = None
     version: str = "1.0"
 
+    def add_metadata(self, key: str, value: Any):
+        """
+        Store format-specific field that may not have equivalents in other formats.
+
+        Example: VS Code's split URL approvals (approveRequest vs approveResponse)
+        don't exist in Claude, so we store them in metadata for round-trip fidelity.
+        """
+        self.metadata[key] = value
+
+    def get_metadata(self, key: str, default=None):
+        """Retrieve format-specific metadata with optional default."""
+        return self.metadata.get(key, default)
+
+    def has_metadata(self, key: str) -> bool:
+        """Check if metadata key exists."""
+        return key in self.metadata
+
 
 @dataclass
 class CanonicalSlashCommand:
