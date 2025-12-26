@@ -50,13 +50,20 @@ class ClaudeAdapter(FormatAdapter):
 
     def can_handle(self, file_path: Path) -> bool:
         """
-        Check if file is a Claude agent file or settings file.
+        Check if file is a Claude agent file, slash command file, or settings file.
 
         Claude agents are .md files that are NOT .agent.md files.
+        Slash commands are .md files in .claude/commands/ directory.
         Settings are settings.json or settings.local.json.
         """
         if file_path.name in ('settings.json', 'settings.local.json'):
             return True
+
+        # Check if file is a slash command (.md file in .claude/commands/)
+        if '.claude/commands' in str(file_path) or '.claude\\commands' in str(file_path):
+            return file_path.suffix == '.md'
+
+        # Otherwise, check if it's a regular agent file
         return (file_path.suffix == '.md' and
                 not file_path.name.endswith('.agent.md'))
 
@@ -64,14 +71,7 @@ class ClaudeAdapter(FormatAdapter):
         """Read file and convert to canonical."""
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        
-        canonical = self.to_canonical(content, config_type)
-
-        # Post-processing: set name from filename for slash commands if missing
-        if config_type == ConfigType.SLASH_COMMAND and hasattr(canonical, 'name') and not canonical.name:
-            canonical.name = file_path.stem
-
-        return canonical
+        return self.to_canonical(content, config_type, file_path)
 
     def write(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand],
               file_path: Path, config_type: ConfigType, options: dict = None):
@@ -80,10 +80,12 @@ class ClaudeAdapter(FormatAdapter):
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-    def to_canonical(self, content: str, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
+    def to_canonical(self, content: str, config_type: ConfigType, file_path: Optional[Path] = None) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
         """Convert Claude format to canonical (delegates to handler)."""
         self.warnings = []
         handler = self._get_handler(config_type)
+        if config_type == ConfigType.SLASH_COMMAND:
+            return handler.to_canonical(content, file_path)
         return handler.to_canonical(content)
 
     def from_canonical(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand],

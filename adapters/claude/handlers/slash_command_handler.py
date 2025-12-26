@@ -6,72 +6,75 @@ and canonical representation.
 """
 
 from typing import Any, Dict, Optional, List
+from pathlib import Path
 from core.canonical_models import CanonicalSlashCommand, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
 
 
 class ClaudeSlashCommandHandler(ConfigTypeHandler):
-    """Handler for Claude slash command files (.md with YAML frontmatter)."""
+    """Handler for Claude slash command files (.md with optional YAML frontmatter)."""
 
     @property
     def config_type(self) -> ConfigType:
         return ConfigType.SLASH_COMMAND
 
-    def to_canonical(self, content: str) -> CanonicalSlashCommand:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalSlashCommand:
         """
         Convert Claude slash command file to canonical.
 
-        Parses YAML frontmatter and markdown body.
+        Parses YAML frontmatter and markdown body for slash commands.
+        The command name is derived from the file path, not frontmatter.
+        Frontmatter is optional - if not present, entire content is treated as instructions.
         """
+        # Try to parse frontmatter, but handle case where it's missing
         try:
             frontmatter, body = parse_yaml_frontmatter(content)
         except ValueError:
-            # Fallback: No frontmatter, treat whole file as instructions
+            # No frontmatter found, treat entire content as body
             frontmatter = {}
             body = content.strip()
 
-        # Handle argument-hint: if list (from YAML [val]), convert to string
-        arg_hint = frontmatter.get('argument-hint')
-        if isinstance(arg_hint, list):
-            # If it's a list like ['message'], take first item or join?
-            # Test expects "[message]" from list ['message']? 
-            # Actually, YAML [message] parses to list. But we want the string representation if it was intended as string.
-            # If the user wrote argument-hint: [message], they might mean "[message]" string.
-            # Let's just join them if list, or convert to string.
-            # But wait, [message] in YAML IS a list.
-            # If the requirement is string, we should probably just cast it or formatted list.
-            # The test failure said: assert ['message'] == '[message]'
-            # So the input was `argument-hint: [message]` (list syntax).
-            # The user likely meant `argument-hint: "[message]"` (string).
-            # We'll convert list to string representation? Or just take the text?
-            # If I convert ['message'] to '[message]', that matches expectation.
-            arg_hint = str(arg_hint).replace("'", "") # ['message'] -> [message] - hacky
-            # Better: if it's a list, probably assume it's a list of args, format as string?
-            # Or just str(arg_hint) which gives "['message']".
-            # The test fixture `full-featured.md` has `argument-hint: [message]`.
-            # This is ambiguous in YAML. It's a flow sequence.
-            # If we want literal "[message]", it should be quoted.
-            # But assuming we want to handle this case:
-            if len(arg_hint) == 1:
-                arg_hint = f"[{arg_hint[0]}]"
-            else:
-                 arg_hint = str(arg_hint)
+        # Validate frontmatter - check for obvious syntax errors like unclosed quotes
+        if frontmatter and not isinstance(frontmatter, dict):
+            raise ValueError(f"Invalid frontmatter format: expected dict, got {type(frontmatter).__name__}")
+
+        # Check for unclosed quotes in the original YAML content if frontmatter was found
+        if '---' in content[:100]:  # Only check if frontmatter exists
+            yaml_section = content.split('---')[1] if len(content.split('---')) > 1 else ''
+            if self._has_unclosed_quotes(yaml_section):
+                raise ValueError("Invalid YAML: unclosed quotes in frontmatter")
+
+        # Derive name from multiple sources (in order of preference):
+        # 1. From frontmatter (for round-trip fidelity)
+        # 2. From file_path (derived from filename)
+        # 3. Empty string as fallback
+        name = frontmatter.get('name', '')
+        if not name and file_path:
+            name = file_path.stem
 
         # Create canonical slash command
-        # Name is often not in frontmatter for slash commands (implied by filename)
-        # It will be set by the adapter's read() method if missing here
-        cmd = CanonicalSlashCommand(
-            name=frontmatter.get('name', ''),
+        # Handle argument-hint which might be parsed as a list by YAML (e.g., [message] -> ['message'])
+        argument_hint = frontmatter.get('argument-hint')
+        if isinstance(argument_hint, list) and len(argument_hint) == 1:
+            # Convert single-element list back to string representation
+            argument_hint = f"[{argument_hint[0]}]"
+
+        slash_command = CanonicalSlashCommand(
+            name=name,
             description=frontmatter.get('description', ''),
             instructions=body,
-            argument_hint=arg_hint,
-            model=self._normalize_model(frontmatter.get('model')),
-            allowed_tools=self._parse_tools(frontmatter.get('allowed-tools')),
+            argument_hint=argument_hint,
+            model=frontmatter.get('model'),
+            allowed_tools=self._parse_allowed_tools(frontmatter.get('allowed-tools', '')),
             source_format='claude'
         )
 
-        return cmd
+        # Preserve Claude-specific fields in metadata
+        if frontmatter and 'disable-model-invocation' in frontmatter:
+            slash_command.add_metadata('claude_disable_model_invocation', frontmatter['disable-model-invocation'])
+
+        return slash_command
 
     def from_canonical(self, canonical_obj: Any,
                       options: Optional[Dict[str, Any]] = None) -> str:
@@ -86,46 +89,78 @@ class ClaudeSlashCommandHandler(ConfigTypeHandler):
         options = options or {}
 
         # Build frontmatter
-        frontmatter = {
-            'description': canonical_obj.description,
-        }
+        frontmatter = {}
 
-        # Include name for round-trip fidelity, even if usually implied by filename
+        # Add name for round-trip fidelity (even though typically derived from filename)
         if canonical_obj.name:
             frontmatter['name'] = canonical_obj.name
 
-        # Optional fields
+        # Add description if present
+        if canonical_obj.description:
+            frontmatter['description'] = canonical_obj.description
+
+        # Add allowed-tools if present (convert list to comma-separated string)
+        if canonical_obj.allowed_tools:
+            frontmatter['allowed-tools'] = ', '.join(canonical_obj.allowed_tools)
+
+        # Add argument-hint if present
         if canonical_obj.argument_hint:
             frontmatter['argument-hint'] = canonical_obj.argument_hint
-        
+
+        # Add model if present
         if canonical_obj.model:
             frontmatter['model'] = canonical_obj.model
-            
-        if canonical_obj.allowed_tools:
-            frontmatter['allowed-tools'] = canonical_obj.allowed_tools
+
+        # Restore Claude-specific metadata
+        if canonical_obj.has_metadata('claude_disable_model_invocation'):
+            frontmatter['disable-model-invocation'] = canonical_obj.get_metadata('claude_disable_model_invocation')
 
         return build_yaml_frontmatter(frontmatter, canonical_obj.instructions)
 
-    def _parse_tools(self, tools_value: Any) -> Optional[List[str]]:
+    def _parse_allowed_tools(self, tools_value: Any) -> List[str]:
         """
-        Parse tools from list or comma-separated string.
+        Parse allowed-tools from comma-separated string or list.
 
         Args:
-            tools_value: List ["tool1", "tool2"] or String "tool1, tool2" or None
+            tools_value: Either string "Tool1, Tool2" or list ["Tool1", "Tool2"]
 
         Returns:
-            List of tool names or None
+            List of tool names/patterns
         """
-        if isinstance(tools_value, list):
-            return tools_value
         if isinstance(tools_value, str):
-             return [t.strip() for t in tools_value.split(',') if t.strip()]
-        return None
+            return [t.strip() for t in tools_value.split(',') if t.strip()]
+        elif isinstance(tools_value, list):
+            return tools_value
+        return []
 
-    def _normalize_model(self, model: Optional[str]) -> Optional[str]:
+    def _has_unclosed_quotes(self, yaml_content: str) -> bool:
         """
-        Normalize model name to canonical form.
+        Check for unclosed quotes in YAML content.
+
+        Args:
+            yaml_content: YAML frontmatter content (without --- delimiters)
+
+        Returns:
+            True if there are unclosed quotes, False otherwise
         """
-        if not model:
-            return None
-        return model.lower()
+        in_single = False
+        in_double = False
+        i = 0
+        while i < len(yaml_content):
+            char = yaml_content[i]
+
+            # Handle escapes
+            if char == '\\' and i + 1 < len(yaml_content):
+                i += 2
+                continue
+
+            # Toggle quote states
+            if char == '"' and not in_single:
+                in_double = not in_double
+            elif char == "'" and not in_double:
+                in_single = not in_single
+
+            i += 1
+
+        # If we end with either quote style still open, we have unclosed quotes
+        return in_single or in_double

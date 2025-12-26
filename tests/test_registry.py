@@ -105,8 +105,8 @@ class TestFormatRegistry:
         assert registry.supports_config_type('claude', ConfigType.PERMISSION)
         assert registry.supports_config_type('copilot', ConfigType.PERMISSION)
 
-        # Neither supports SLASH_COMMAND yet (not implemented)
-        assert not registry.supports_config_type('claude', ConfigType.SLASH_COMMAND)
+        # Claude supports SLASH_COMMAND, Copilot doesn't (yet)
+        assert registry.supports_config_type('claude', ConfigType.SLASH_COMMAND)
         assert not registry.supports_config_type('copilot', ConfigType.SLASH_COMMAND)
 
     def test_supports_config_type_nonexistent(self, registry):
@@ -128,9 +128,10 @@ class TestFormatRegistry:
         assert 'copilot' in formats
         assert len(formats) == 2
 
-        # No adapters support SLASH_COMMAND yet
+        # Claude supports SLASH_COMMAND
         formats = registry.get_formats_supporting(ConfigType.SLASH_COMMAND)
-        assert len(formats) == 0
+        assert 'claude' in formats
+        assert len(formats) == 1  # Only Claude for now (Copilot support TBD)
 
     def test_unregister_adapter(self, registry):
         """Test unregistering an adapter."""
