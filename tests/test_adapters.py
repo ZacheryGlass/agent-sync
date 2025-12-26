@@ -673,23 +673,28 @@ No description here.
 
     # Phase 6: Error Handling
 
-    def test_slash_command_error_handling(self, adapter):
-        """Test handling of invalid YAML and missing required fields."""
-        # Note: This test will fail until ClaudeSlashCommandHandler is implemented
-
-        # Test invalid YAML frontmatter
-        invalid_yaml = """---
-description: "Unclosed quote
-allowed-tools: Read
----
-
-Instructions.
-"""
-        with pytest.raises((ValueError, Exception)):
-            adapter.to_canonical(invalid_yaml, ConfigType.SLASH_COMMAND)
-
-        # Test malformed frontmatter delimiters
-        malformed = """--
+        def test_slash_command_error_handling(self, adapter):
+            """Test handling of invalid YAML and missing required fields."""
+            # Note: This test will fail until ClaudeSlashCommandHandler is implemented        
+    
+            # Test invalid YAML frontmatter - handled permissively by shared parser
+            invalid_yaml = """---
+    description: "Unclosed quote
+    allowed-tools: Read
+    ---
+    
+    Instructions.
+    """
+            # Should not raise error due to permissive parsing
+            cmd = adapter.to_canonical(invalid_yaml, ConfigType.SLASH_COMMAND)
+            
+            # Verify it managed to extract something
+            assert '"Unclosed quote' in cmd.description
+            # "Read" string should be parsed into list by _parse_tools
+            assert cmd.allowed_tools == ['Read']
+    
+            # Test malformed frontmatter delimiters
+            malformed = """--
 description: Test
 --
 

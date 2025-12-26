@@ -58,6 +58,11 @@ Examples:
            --source-format claude --target-format copilot \\
            --config-type permission
 
+  # Sync Claude slash commands to Copilot
+  %(prog)s --source-dir ~/.claude/commands --target-dir .github/prompts \\
+           --source-format claude --target-format copilot \\
+           --config-type slash-command
+
   # Bidirectional sync with dry-run
   %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
            --source-format claude --target-format copilot \\
