@@ -1,4 +1,5 @@
-"Universal sync orchestrator for coordinating multi-format synchronization.
+"""
+Universal sync orchestrator for coordinating multi-format synchronization.
 
 The orchestrator is responsible for:
 - Discovering file pairs across formats
@@ -10,7 +11,7 @@ The orchestrator is responsible for:
 
 This replaces the format-specific AgentSyncer with a universal version
 that works with any formats through the adapter interface.
-"
+"""
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any
