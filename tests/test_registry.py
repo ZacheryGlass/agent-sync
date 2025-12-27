@@ -37,9 +37,13 @@ class TestFormatRegistry:
         assert registry.get_adapter('claude') is not None
 
     def test_register_duplicate_raises_error(self, registry):
-        """Test that registering duplicate format raises error."""
-        with pytest.raises(ValueError, match="already registered"):
+        """Test that registering duplicate format raises error with helpful message."""
+        with pytest.raises(ValueError) as excinfo:
             registry.register(ClaudeAdapter())
+        
+        assert "already registered" in str(excinfo.value)
+        assert "existing: ClaudeAdapter" in str(excinfo.value)
+        assert "new: ClaudeAdapter" in str(excinfo.value)
 
     def test_get_adapter(self, registry):
         """Test retrieving adapter by name."""
@@ -75,6 +79,41 @@ class TestFormatRegistry:
         adapter = registry.detect_format(Path('.github/agents/reviewer.agent.md'))
         assert adapter is not None
         assert adapter.format_name == 'copilot'
+
+    def test_detect_format_ambiguous_files(self, registry):
+        """
+        Test that .prompt.md and .perm.json are correctly detected as copilot.
+        These used to be ambiguous with Claude if Claude was registered first.
+        """
+        # .prompt.md should be copilot
+        adapter = registry.detect_format(Path('test.prompt.md'))
+        assert adapter is not None
+        assert adapter.format_name == 'copilot'
+
+        # .perm.json should be copilot
+        adapter = registry.detect_format(Path('test.perm.json'))
+        assert adapter is not None
+        assert adapter.format_name == 'copilot'
+
+    def test_detect_format_order_independence(self):
+        """
+        Test that format detection is deterministic regardless of registration order.
+        """
+        # Case 1: Claude then Copilot
+        registry1 = FormatRegistry()
+        registry1.register(ClaudeAdapter())
+        registry1.register(CopilotAdapter())
+        
+        adapter1 = registry1.detect_format(Path('test.prompt.md'))
+        assert adapter1.format_name == 'copilot'
+
+        # Case 2: Copilot then Claude
+        registry2 = FormatRegistry()
+        registry2.register(CopilotAdapter())
+        registry2.register(ClaudeAdapter())
+        
+        adapter2 = registry2.detect_format(Path('test.prompt.md'))
+        assert adapter2.format_name == 'copilot'
 
     def test_detect_format_no_match(self, registry):
         """Test that detecting unknown format returns None."""
@@ -113,6 +152,20 @@ class TestFormatRegistry:
         """Test checking support for non-existent format returns False."""
         assert not registry.supports_config_type('unknown', ConfigType.AGENT)
         assert not registry.supports_config_type('nonexistent', ConfigType.PERMISSION)
+
+    def test_validate_conversion_support(self, registry):
+        """Test validating conversion support for a pair of formats."""
+        # Both claude and copilot support AGENT
+        assert registry.validate_conversion_support('claude', 'copilot', ConfigType.AGENT)
+        
+        # Both support PERMISSION
+        assert registry.validate_conversion_support('claude', 'copilot', ConfigType.PERMISSION)
+        
+        # One format does not exist
+        assert not registry.validate_conversion_support('claude', 'nonexistent', ConfigType.AGENT)
+        
+        # Both support SLASH_COMMAND
+        assert registry.validate_conversion_support('claude', 'copilot', ConfigType.SLASH_COMMAND)
 
     def test_get_formats_supporting(self, registry):
         """Test getting all formats supporting a config type."""

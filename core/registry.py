@@ -27,6 +27,12 @@ class FormatRegistry:
 
         adapter = registry.get_adapter('claude')
         adapter = registry.detect_format(Path('agent.md'))
+
+    Thread Safety:
+        The registry is not thread-safe for concurrent registration or
+        unregistration. It is recommended to register all adapters during
+        application startup. Once initialized, concurrent read operations
+        (get_adapter, detect_format, etc.) are safe.
     """
 
     def __init__(self):
@@ -48,7 +54,11 @@ class FormatRegistry:
             registry.register(CopilotAdapter())
         """
         if adapter.format_name in self._adapters:
-            raise ValueError(f"Adapter for format '{adapter.format_name}' already registered")
+            existing = self._adapters[adapter.format_name]
+            raise ValueError(
+                f"Adapter for format '{adapter.format_name}' already registered "
+                f"(existing: {existing.__class__.__name__}, new: {adapter.__class__.__name__})"
+            )
         self._adapters[adapter.format_name] = adapter
 
     def unregister(self, format_name: str):
@@ -142,7 +152,27 @@ class FormatRegistry:
             registry.supports_config_type('copilot', ConfigType.PERMISSION)  # False
         """
         adapter = self.get_adapter(format_name)
-        return adapter and config_type in adapter.supported_config_types
+        return bool(adapter and config_type in adapter.supported_config_types)
+
+    def validate_conversion_support(self, source_format: str, target_format: str,
+                                 config_type: ConfigType) -> bool:
+        """
+        Validate that both formats support the given config type for conversion.
+
+        Args:
+            source_format: Source format identifier
+            target_format: Target format identifier
+            config_type: ConfigType to validate
+
+        Returns:
+            True if both formats support the config type
+
+        Example:
+            if registry.validate_conversion_support('claude', 'copilot', ConfigType.AGENT):
+                # Proceed with conversion
+        """
+        return (self.supports_config_type(source_format, config_type) and
+                self.supports_config_type(target_format, config_type))
 
     def get_formats_supporting(self, config_type: ConfigType) -> List[str]:
         """

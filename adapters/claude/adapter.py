@@ -57,7 +57,7 @@ class ClaudeAdapter(FormatAdapter):
         guarantee that the file content is valid for a specific ConfigType.
         ConfigType-specific logic is handled by individual handlers during conversion.
 
-        Claude agents are .md files that are NOT .agent.md files.
+        Claude agents are .md files that are NOT .agent.md or .prompt.md files.
         Slash commands are .md files in .claude/commands/ directory.
         Settings are settings.json or settings.local.json.
         """
@@ -71,7 +71,7 @@ class ClaudeAdapter(FormatAdapter):
 
         # Otherwise, check if it's a regular agent file
         return (file_path.suffix == '.md' and
-                not file_path.name.endswith('.agent.md'))
+                not file_path.name.endswith(('.agent.md', '.prompt.md', '.perm.json')))
 
     def read(self, file_path: Path, config_type: ConfigType) -> CanonicalConfig:
         """Read file and convert to canonical."""
