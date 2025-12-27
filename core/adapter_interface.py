@@ -18,8 +18,8 @@ Benefits:
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Any, Dict
-from .canonical_models import ConfigType, CanonicalConfig
+from typing import List, Optional, Any, Dict, Union
+from .canonical_models import ConfigType, CanonicalConfig, CanonicalAgent, CanonicalPermission, CanonicalSlashCommand
 
 
 class FormatAdapter(ABC):
@@ -113,7 +113,7 @@ class FormatAdapter(ABC):
             config_type: Type of config to read (AGENT, PERMISSION, SLASH_COMMAND)
 
         Returns:
-            CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
+            Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]
 
         Raises:
             ValueError: If file format is invalid
@@ -129,7 +129,7 @@ class FormatAdapter(ABC):
         Write canonical format to file in this format.
 
         Args:
-            canonical_obj: CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
+            canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]
             file_path: Where to write the file
             config_type: Type of config being written
             options: Optional conversion options (e.g., add_argument_hint)
@@ -156,7 +156,7 @@ class FormatAdapter(ABC):
                       metadata like filename-based command names)
 
         Returns:
-            CanonicalAgent | CanonicalPermission | CanonicalSlashCommand
+            Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]
 
         Example:
             def to_canonical(self, content: str, config_type: ConfigType, file_path=None) -> CanonicalAgent:
