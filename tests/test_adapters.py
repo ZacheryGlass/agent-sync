@@ -1504,3 +1504,393 @@ Review the following code: ${selection}
         # Copilot-specific metadata should survive Copilot round-trip
         assert copilot_canonical.get_metadata('copilot_agent') == 'ask' or \
                copilot_canonical.get_metadata('copilot_agent') is not None
+
+
+class TestGeminiSlashCommands:
+    """Tests for GeminiSlashCommandHandler.
+
+    Note: These tests are written before the Gemini adapter implementation exists.
+    They serve as a specification for the expected behavior of the Gemini
+    slash-command handler, which uses TOML format instead of Markdown.
+
+    Gemini-specific features:
+    - TOML file format (.toml extension)
+    - Namespace support via directory structure (git/review.toml → "git:review")
+    - Placeholder syntax: {{args}}, !{cmd}, @{file}
+    - Auto-append args if {{args}} not present
+    """
+
+    @pytest.fixture
+    def adapter(self):
+        """Create GeminiAdapter instance.
+
+        Note: This will fail until GeminiAdapter is implemented.
+        """
+        # This import will fail until the adapter exists
+        try:
+            from adapters import GeminiAdapter
+            return GeminiAdapter()
+        except ImportError:
+            pytest.skip("GeminiAdapter not yet implemented")
+
+    @pytest.fixture
+    def minimal_toml_content(self):
+        """Minimal TOML slash-command (only required fields)."""
+        return '''prompt = """
+Review this code for bugs and suggest improvements.
+"""
+'''
+
+    @pytest.fixture
+    def simple_toml_content(self):
+        """Simple TOML with basic fields."""
+        return '''description = "Create a git commit with AI-generated message"
+
+prompt = """
+Review the current git status and staged changes.
+
+Git Status:
+!{git status}
+
+Create a conventional commit message.
+
+{{args}}
+"""
+'''
+
+    @pytest.fixture
+    def full_featured_toml_content(self):
+        """Full-featured TOML with all placeholder types."""
+        return '''description = "Generate documentation for code files"
+
+prompt = """
+Generate comprehensive documentation for the following code:
+
+@{{{args}}}
+
+Include:
+1. Overview and purpose
+2. Function/class descriptions
+3. Parameter and return value documentation
+
+Format the documentation appropriately for the language.
+"""
+'''
+
+    @pytest.fixture
+    def canonical_slash_command_minimal(self):
+        """Minimal CanonicalSlashCommand for serialization tests."""
+        return CanonicalSlashCommand(
+            name="test-command",
+            description="Test command",
+            instructions="Test command instructions.",
+            source_format="gemini"
+        )
+
+    @pytest.fixture
+    def canonical_slash_command_full(self):
+        """Full CanonicalSlashCommand with Gemini-specific metadata."""
+        command = CanonicalSlashCommand(
+            name="git:review",
+            description="Review code changes",
+            instructions="Review the following changes:\n\n!{git diff}\n\nProvide feedback.\n\n{{args}}",
+            source_format="gemini"
+        )
+        # Add Gemini-specific metadata
+        command.add_metadata('gemini_namespace', 'git:review')
+        command.add_metadata('gemini_shell_placeholders', ['!{git diff}'])
+        command.add_metadata('gemini_args_placeholder', True)
+        return command
+
+    # Phase 1: Property Tests
+
+    def test_slash_command_config_type(self, adapter):
+        """Test that GeminiSlashCommandHandler returns correct config type."""
+        handler = adapter._get_handler(ConfigType.SLASH_COMMAND)
+        assert handler.config_type == ConfigType.SLASH_COMMAND
+
+    def test_file_extension_detection(self, adapter):
+        """Test that adapter recognizes .toml files."""
+        assert adapter.can_handle(Path("command.toml")) is True
+        assert adapter.can_handle(Path("git/review.toml")) is True
+        assert adapter.can_handle(Path("command.md")) is False
+        assert adapter.can_handle(Path("command.prompt.md")) is False
+
+    # Phase 2: to_canonical() Tests
+
+    def test_to_canonical_minimal(self, adapter, tmp_path):
+        """Test parsing minimal TOML (only prompt field)."""
+        # Use analyze.toml which has no {{args}} placeholder
+        fixture_path = Path("tests/fixtures/gemini/commands/analyze.toml")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name should be derived from filename
+        assert slash_command.name == "analyze"
+        # Description should be present
+        assert slash_command.description == "Analyze project structure and provide insights"
+        # Instructions should be the prompt content
+        assert "Analyze the project structure" in slash_command.instructions
+        assert "!{tree" in slash_command.instructions
+        # Source format should be gemini
+        assert slash_command.source_format == "gemini"
+        # Should preserve shell command placeholders in metadata
+        assert slash_command.has_metadata('gemini_shell_placeholders')
+
+    def test_to_canonical_simple(self, adapter, tmp_path):
+        """Test parsing simple TOML with description and placeholders."""
+        fixture_path = Path("tests/fixtures/gemini/commands/commit.toml")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name from filename
+        assert slash_command.name == "commit"
+        # Description from TOML
+        assert slash_command.description == "Create a git commit with AI-generated message"
+        # Instructions should contain placeholders
+        assert "{{args}}" in slash_command.instructions
+        assert "!{git status}" in slash_command.instructions
+        assert "!{git diff --staged}" in slash_command.instructions
+        # Should preserve placeholders in metadata
+        shell_placeholders = slash_command.get_metadata('gemini_shell_placeholders')
+        assert shell_placeholders is not None
+        assert len(shell_placeholders) >= 2
+        assert slash_command.get_metadata('gemini_args_placeholder') is True
+
+    def test_to_canonical_namespaced(self, adapter, tmp_path):
+        """Test namespace extraction from subdirectory path."""
+        fixture_path = Path("tests/fixtures/gemini/commands/git/review.toml")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Name should include namespace from directory
+        assert slash_command.name == "git:review"
+        # Namespace should be preserved in metadata
+        assert slash_command.get_metadata('gemini_namespace') == "git:review"
+        # Description should be present
+        assert "Review code changes" in slash_command.description
+
+    def test_to_canonical_file_embedding(self, adapter, tmp_path):
+        """Test file embedding placeholder (@{...}) preservation."""
+        fixture_path = Path("tests/fixtures/gemini/commands/document.toml")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Instructions should preserve file embedding syntax
+        assert "@{{{args}}}" in slash_command.instructions
+        # Should preserve file placeholders in metadata
+        file_placeholders = slash_command.get_metadata('gemini_file_placeholders')
+        assert file_placeholders is not None
+        assert len(file_placeholders) >= 1
+
+    def test_to_canonical_from_string(self, adapter, simple_toml_content):
+        """Test parsing TOML from string content."""
+        slash_command = adapter.to_canonical(simple_toml_content, ConfigType.SLASH_COMMAND)
+
+        assert slash_command.description == "Create a git commit with AI-generated message"
+        assert "{{args}}" in slash_command.instructions
+        assert "!{git status}" in slash_command.instructions
+
+    # Phase 3: from_canonical() Tests
+
+    def test_from_canonical_minimal(self, adapter, canonical_slash_command_minimal):
+        """Test generating minimal TOML from canonical."""
+        output = adapter.from_canonical(canonical_slash_command_minimal, ConfigType.SLASH_COMMAND)
+
+        # Should be valid TOML
+        assert isinstance(output, str)
+        # Should contain prompt field
+        assert 'prompt = """' in output or 'prompt =' in output
+        # Should contain instructions
+        assert "Test command instructions" in output
+        # Description should be present
+        assert 'description =' in output
+
+    def test_from_canonical_with_metadata(self, adapter, canonical_slash_command_full):
+        """Test generating TOML with Gemini-specific metadata."""
+        output = adapter.from_canonical(canonical_slash_command_full, ConfigType.SLASH_COMMAND)
+
+        # Should contain description
+        assert 'description = "Review code changes"' in output or "Review code changes" in output
+        # Should preserve placeholders from metadata
+        assert "{{args}}" in output
+        assert "!{git diff}" in output
+        # Should be valid TOML structure
+        assert 'prompt = """' in output or 'prompt =' in output
+
+    def test_from_canonical_multiline_prompt(self, adapter):
+        """Test TOML triple-quote formatting for multiline prompts."""
+        command = CanonicalSlashCommand(
+            name="multiline-test",
+            description="Test multiline",
+            instructions="Line 1\n\nLine 2\n\nLine 3 with special chars: \"quotes\" and 'apostrophes'",
+            source_format="gemini"
+        )
+
+        output = adapter.from_canonical(command, ConfigType.SLASH_COMMAND)
+
+        # Should use triple-quoted string for multiline
+        assert '"""' in output
+        # Should preserve line breaks
+        assert "Line 1" in output
+        assert "Line 2" in output
+        assert "Line 3" in output
+
+    # Phase 4: Round-Trip Tests
+
+    def test_round_trip_simple(self, adapter):
+        """Test TOML → Canonical → TOML preserves data."""
+        fixture_path = Path("tests/fixtures/gemini/commands/commit.toml")
+
+        # Read original
+        canonical1 = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Convert to TOML
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+
+        # Parse again
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        # Verify preservation
+        assert canonical1.name == canonical2.name
+        assert canonical1.description == canonical2.description
+        assert canonical1.instructions.strip() == canonical2.instructions.strip()
+        # Metadata should be preserved
+        assert canonical1.get_metadata('gemini_args_placeholder') == canonical2.get_metadata('gemini_args_placeholder')
+
+    def test_round_trip_namespaced(self, adapter):
+        """Test round-trip preserves namespace."""
+        fixture_path = Path("tests/fixtures/gemini/commands/git/review.toml")
+
+        canonical1 = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        # Namespace should survive round-trip
+        assert canonical1.name == canonical2.name
+        assert "git:review" in canonical2.name or canonical2.get_metadata('gemini_namespace') == "git:review"
+
+    def test_round_trip_all_placeholders(self, adapter):
+        """Test round-trip with all placeholder types."""
+        fixture_path = Path("tests/fixtures/gemini/commands/document.toml")
+
+        canonical1 = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+        output = adapter.from_canonical(canonical1, ConfigType.SLASH_COMMAND)
+        canonical2 = adapter.to_canonical(output, ConfigType.SLASH_COMMAND)
+
+        # All placeholder types should survive
+        assert "@{" in canonical2.instructions
+        assert "{{args}}" in canonical2.instructions or canonical2.has_metadata('gemini_file_placeholders')
+
+    # Phase 5: Edge Cases
+
+    def test_edge_case_no_args_placeholder(self, adapter):
+        """Test command without {{args}} placeholder (auto-append behavior)."""
+        fixture_path = Path("tests/fixtures/gemini/commands/analyze.toml")
+
+        slash_command = adapter.read(fixture_path, ConfigType.SLASH_COMMAND)
+
+        # Should note absence of {{args}} in metadata
+        has_args = slash_command.get_metadata('gemini_args_placeholder')
+        assert has_args is False or has_args is None
+
+    def test_edge_case_mixed_placeholders(self, adapter):
+        """Test command with multiple placeholder types."""
+        content = '''description = "Mixed placeholders test"
+
+prompt = """
+File content: @{test.py}
+Git status: !{git status}
+User args: {{args}}
+"""
+'''
+
+        slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+
+        # All placeholders should be preserved
+        assert "@{test.py}" in slash_command.instructions
+        assert "!{git status}" in slash_command.instructions
+        assert "{{args}}" in slash_command.instructions
+        # Metadata should track all types
+        assert slash_command.has_metadata('gemini_shell_placeholders')
+        assert slash_command.has_metadata('gemini_file_placeholders')
+        assert slash_command.get_metadata('gemini_args_placeholder') is True
+
+    def test_edge_case_special_characters_in_toml(self, adapter):
+        """Test TOML escaping of special characters."""
+        content = '''description = "Test with \"quotes\" and 'apostrophes'"
+
+prompt = """
+Special chars: "double quotes", 'single quotes', backslash\\
+"""
+'''
+
+        slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+
+        # Should preserve special characters
+        assert "quotes" in slash_command.description
+        assert "apostrophes" in slash_command.description
+
+    def test_edge_case_empty_description(self, adapter):
+        """Test command with missing description field."""
+        content = '''prompt = """
+Command without description.
+"""
+'''
+
+        slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+
+        # Description should be empty or None, not raise error
+        assert slash_command.description == "" or slash_command.description is None
+
+    def test_edge_case_nested_namespace(self, adapter, tmp_path):
+        """Test deeply nested namespace."""
+        # Create a test file simulating deep nesting
+        test_file = tmp_path / "commands" / "git" / "hooks" / "pre-commit.toml"
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+        test_file.write_text('''description = "Pre-commit hook"
+
+prompt = """Test"""
+''')
+
+        slash_command = adapter.read(test_file, ConfigType.SLASH_COMMAND)
+
+        # Should create nested namespace
+        assert "git:hooks:pre-commit" in slash_command.name or \
+               slash_command.get_metadata('gemini_namespace') == "git:hooks:pre-commit"
+
+    # Phase 6: Error Handling
+
+    def test_error_invalid_toml(self, adapter):
+        """Test handling of invalid TOML syntax."""
+        invalid_toml = '''description = "Unclosed quote
+
+prompt = """Test"""
+'''
+
+        with pytest.raises((ValueError, Exception)):
+            adapter.to_canonical(invalid_toml, ConfigType.SLASH_COMMAND)
+
+    def test_error_missing_prompt_field(self, adapter):
+        """Test error when required prompt field is missing."""
+        invalid_toml = '''description = "No prompt field"
+'''
+
+        with pytest.raises(ValueError, match="prompt"):
+            adapter.to_canonical(invalid_toml, ConfigType.SLASH_COMMAND)
+
+    def test_error_malformed_placeholder(self, adapter):
+        """Test handling of malformed placeholders."""
+        content = '''description = "Malformed placeholder"
+
+prompt = """
+This has a malformed placeholder: !{unclosed command
+And a weird one: @{
+"""
+'''
+
+        # Should not raise error, but may track in warnings
+        slash_command = adapter.to_canonical(content, ConfigType.SLASH_COMMAND)
+
+        # Should still parse, possibly with warning
+        assert slash_command.description == "Malformed placeholder"
