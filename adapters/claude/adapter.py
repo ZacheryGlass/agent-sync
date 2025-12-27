@@ -52,6 +52,11 @@ class ClaudeAdapter(FormatAdapter):
         """
         Check if file is a Claude agent file, slash command file, or settings file.
 
+        Note: This method checks if the file matches the format-level patterns
+        (file extensions and directory structures) used by Claude. It does not
+        guarantee that the file content is valid for a specific ConfigType.
+        ConfigType-specific logic is handled by individual handlers during conversion.
+
         Claude agents are .md files that are NOT .agent.md files.
         Slash commands are .md files in .claude/commands/ directory.
         Settings are settings.json or settings.local.json.
