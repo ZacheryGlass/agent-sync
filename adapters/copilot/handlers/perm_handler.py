@@ -8,6 +8,7 @@ chat.tools.urls.autoApprove) to/from canonical permission representation.
 import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
 from core.canonical_models import CanonicalPermission, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 
@@ -19,7 +20,7 @@ class CopilotPermissionHandler(ConfigTypeHandler):
     def config_type(self) -> ConfigType:
         return ConfigType.PERMISSION
 
-    def to_canonical(self, content: str) -> CanonicalPermission:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalPermission:
         """
         Convert VS Code settings JSON to canonical permission.
 

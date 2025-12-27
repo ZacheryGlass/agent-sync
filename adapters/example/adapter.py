@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from core.adapter_interface import FormatAdapter
-from core.canonical_models import CanonicalAgent, ConfigType
+from core.canonical_models import CanonicalAgent, ConfigType, CanonicalConfig
 from .handlers.agent_handler import ExampleAgentHandler
 
 
@@ -64,6 +64,14 @@ class ExampleAdapter(FormatAdapter):
         """
         return ".example"
 
+    def get_file_extension(self, config_type: ConfigType) -> str:
+        """
+        Get file extension for a specific config type.
+        
+        TODO: Implement logic if different config types use different extensions.
+        """
+        return self.file_extension
+
     @property
     def supported_config_types(self) -> List[ConfigType]:
         """Return list of supported config types (from registered handlers)."""
@@ -80,20 +88,20 @@ class ExampleAdapter(FormatAdapter):
         """
         return file_path.suffix == self.file_extension
 
-    def read(self, file_path: Path, config_type: ConfigType):
+    def read(self, file_path: Path, config_type: ConfigType) -> CanonicalConfig:
         """Read file and convert to canonical (delegates to handler)."""
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        return self.to_canonical(content, config_type)
+        return self.to_canonical(content, config_type, file_path)
 
-    def write(self, canonical_obj, file_path: Path, config_type: ConfigType,
+    def write(self, canonical_obj: CanonicalConfig, file_path: Path, config_type: ConfigType,
               options: dict = None):
         """Write canonical to file (delegates to handler)."""
         content = self.from_canonical(canonical_obj, config_type, options)
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-    def to_canonical(self, content: str, config_type: ConfigType):
+    def to_canonical(self, content: str, config_type: ConfigType, file_path: Optional[Path] = None) -> CanonicalConfig:
         """
         Convert format-specific content to canonical (delegates to handler).
 
@@ -102,9 +110,9 @@ class ExampleAdapter(FormatAdapter):
         """
         self.warnings = []
         handler = self._get_handler(config_type)
-        return handler.to_canonical(content)
+        return handler.to_canonical(content, file_path)
 
-    def from_canonical(self, canonical_obj, config_type: ConfigType,
+    def from_canonical(self, canonical_obj: CanonicalConfig, config_type: ConfigType,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """
         Convert canonical to format-specific content (delegates to handler).
@@ -116,7 +124,7 @@ class ExampleAdapter(FormatAdapter):
         handler = self._get_handler(config_type)
         return handler.from_canonical(canonical_obj, options)
 
-    def get_conversion_warnings(self) -> List[str]:
+    def get_warnings(self) -> List[str]:
         """Return warnings about data loss or unsupported features."""
         return self.warnings
 

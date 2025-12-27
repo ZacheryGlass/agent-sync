@@ -6,6 +6,7 @@ and canonical representation.
 """
 
 from typing import Any, Dict, Optional
+from pathlib import Path
 from core.canonical_models import CanonicalAgent, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
@@ -31,7 +32,7 @@ class CopilotAgentHandler(ConfigTypeHandler):
     def config_type(self) -> ConfigType:
         return ConfigType.AGENT
 
-    def to_canonical(self, content: str) -> CanonicalAgent:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalAgent:
         """
         Convert Copilot agent file to canonical.
 

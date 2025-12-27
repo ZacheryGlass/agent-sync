@@ -9,10 +9,9 @@ types (agents, permissions, prompts), create separate handler files for each.
 """
 
 from typing import Any, Dict, Optional
+from pathlib import Path
 from core.canonical_models import CanonicalAgent, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
-# TODO: If your format uses YAML frontmatter, uncomment this:
-# from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
 
 
 class ExampleAgentHandler(ConfigTypeHandler):
@@ -44,7 +43,7 @@ class ExampleAgentHandler(ConfigTypeHandler):
         """This handler processes AGENT config type."""
         return ConfigType.AGENT
 
-    def to_canonical(self, content: str) -> CanonicalAgent:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalAgent:
         """
         Convert your format's agent file to canonical representation.
 

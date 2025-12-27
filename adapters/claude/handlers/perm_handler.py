@@ -7,6 +7,7 @@ Handles conversion of permission configurations between Claude format
 
 import json
 from typing import Any, Dict, Optional
+from pathlib import Path
 from core.canonical_models import CanonicalPermission, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 
@@ -18,7 +19,7 @@ class ClaudePermissionHandler(ConfigTypeHandler):
     def config_type(self) -> ConfigType:
         return ConfigType.PERMISSION
 
-    def to_canonical(self, content: str) -> CanonicalPermission:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalPermission:
         """
         Convert Claude settings JSON to canonical permission.
 

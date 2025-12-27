@@ -1,5 +1,4 @@
-"""
-Universal sync orchestrator for coordinating multi-format synchronization.
+"Universal sync orchestrator for coordinating multi-format synchronization.
 
 The orchestrator is responsible for:
 - Discovering file pairs across formats
@@ -11,7 +10,7 @@ The orchestrator is responsible for:
 
 This replaces the format-specific AgentSyncer with a universal version
 that works with any formats through the adapter interface.
-"""
+"
 
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -438,11 +437,11 @@ class UniversalSyncOrchestrator:
                     target_mtime = pair.target_mtime or datetime.now().timestamp()
 
                 # Log conversion warnings
-                for warning in self.source_adapter.get_conversion_warnings():
+                for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
                 self.source_adapter.clear_conversion_warnings()
 
-                for warning in self.target_adapter.get_conversion_warnings():
+                for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
                 self.target_adapter.clear_conversion_warnings()
 
@@ -493,13 +492,13 @@ class UniversalSyncOrchestrator:
                     source_mtime = pair.source_mtime or datetime.now().timestamp()
 
                 # Log conversion warnings
-                for warning in self.target_adapter.get_conversion_warnings():
-                    self.log(f"  Warning: {warning}")
-                self.target_adapter.clear_conversion_warnings()
-
-                for warning in self.source_adapter.get_conversion_warnings():
+                for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
                 self.source_adapter.clear_conversion_warnings()
+
+                for warning in self.target_adapter.get_warnings():
+                    self.log(f"  Warning: {warning}")
+                self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
                 if not self.dry_run:

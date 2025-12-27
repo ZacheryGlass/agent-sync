@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 
 from core.adapter_interface import FormatAdapter
-from core.canonical_models import CanonicalAgent, CanonicalPermission, CanonicalSlashCommand, ConfigType
+from core.canonical_models import CanonicalAgent, CanonicalPermission, CanonicalSlashCommand, ConfigType, CanonicalConfig
 from .handlers.agent_handler import ClaudeAgentHandler
 from .handlers.perm_handler import ClaudePermissionHandler
 from .handlers.slash_command_handler import ClaudeSlashCommandHandler
@@ -68,7 +68,7 @@ class ClaudeAdapter(FormatAdapter):
         return (file_path.suffix == '.md' and
                 not file_path.name.endswith('.agent.md'))
 
-    def read(self, file_path: Path, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
+    def read(self, file_path: Path, config_type: ConfigType) -> CanonicalConfig:
         """Read file and convert to canonical."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -79,7 +79,7 @@ class ClaudeAdapter(FormatAdapter):
             raise ValueError(f"File not found: {file_path}")
         return self.to_canonical(content, config_type, file_path)
 
-    def write(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand],
+    def write(self, canonical_obj: CanonicalConfig,
               file_path: Path, config_type: ConfigType, options: dict = None):
         """Write canonical to file in Claude format."""
         content = self.from_canonical(canonical_obj, config_type, options)
@@ -91,15 +91,13 @@ class ClaudeAdapter(FormatAdapter):
         except FileNotFoundError:
             raise ValueError(f"File not found: {file_path}")
 
-    def to_canonical(self, content: str, config_type: ConfigType, file_path: Optional[Path] = None) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
+    def to_canonical(self, content: str, config_type: ConfigType, file_path: Optional[Path] = None) -> CanonicalConfig:
         """Convert Claude format to canonical (delegates to handler)."""
         self.warnings = []
         handler = self._get_handler(config_type)
-        if config_type == ConfigType.SLASH_COMMAND:
-            return handler.to_canonical(content, file_path)
-        return handler.to_canonical(content)
+        return handler.to_canonical(content, file_path)
 
-    def from_canonical(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand],
+    def from_canonical(self, canonical_obj: CanonicalConfig,
                       config_type: ConfigType,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """Convert canonical to Claude format (delegates to handler)."""
@@ -107,7 +105,7 @@ class ClaudeAdapter(FormatAdapter):
         handler = self._get_handler(config_type)
         return handler.from_canonical(canonical_obj, options)
 
-    def get_conversion_warnings(self) -> List[str]:
+    def get_warnings(self) -> List[str]:
         return self.warnings
 
     def clear_conversion_warnings(self):
@@ -118,12 +116,3 @@ class ClaudeAdapter(FormatAdapter):
         if config_type not in self._handlers:
             raise ValueError(f"Unsupported config type: {config_type}")
         return self._handlers[config_type]
-
-    # Delegation methods for backward compatibility with tests
-    def _parse_tools(self, tools_value):
-        """Delegate to agent handler for backward compatibility."""
-        return self._handlers[ConfigType.AGENT]._parse_tools(tools_value)
-
-    def _normalize_model(self, model: Optional[str]) -> Optional[str]:
-        """Delegate to agent handler for backward compatibility."""
-        return self._handlers[ConfigType.AGENT]._normalize_model(model)

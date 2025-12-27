@@ -17,7 +17,7 @@ import time
 from core.orchestrator import UniversalSyncOrchestrator, FilePair
 from core.registry import FormatRegistry
 from core.state_manager import SyncStateManager
-from core.canonical_models import ConfigType, CanonicalPermission
+from core.canonical_models import ConfigType, CanonicalPermission, CanonicalConfig
 from core.adapter_interface import FormatAdapter
 from adapters import ClaudeAdapter, CopilotAdapter
 
@@ -1607,6 +1607,9 @@ class MockPermissionAdapter(FormatAdapter):
     def file_extension(self) -> str:
         return self._extension
 
+    def get_file_extension(self, config_type: ConfigType) -> str:
+        return self._extension
+
     @property
     def supported_config_types(self):
         if self._supports_perm:
@@ -1625,7 +1628,7 @@ class MockPermissionAdapter(FormatAdapter):
         # Actually write file so stat() works
         file_path.write_text("mock content")
 
-    def to_canonical(self, content, config_type):
+    def to_canonical(self, content, config_type, file_path=None):
         return CanonicalPermission()
 
     def from_canonical(self, canonical_obj, config_type, options=None):

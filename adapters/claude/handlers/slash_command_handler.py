@@ -10,6 +10,7 @@ from pathlib import Path
 from core.canonical_models import CanonicalSlashCommand, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
+from adapters.shared.utils import parse_tool_list
 
 
 class ClaudeSlashCommandHandler(ConfigTypeHandler):
@@ -66,7 +67,7 @@ class ClaudeSlashCommandHandler(ConfigTypeHandler):
             instructions=body,
             argument_hint=argument_hint,
             model=frontmatter.get('model'),
-            allowed_tools=self._parse_allowed_tools(frontmatter.get('allowed-tools', '')),
+            allowed_tools=parse_tool_list(frontmatter.get('allowed-tools', '')),
             source_format='claude'
         )
 
@@ -116,22 +117,6 @@ class ClaudeSlashCommandHandler(ConfigTypeHandler):
             frontmatter['disable-model-invocation'] = canonical_obj.get_metadata('claude_disable_model_invocation')
 
         return build_yaml_frontmatter(frontmatter, canonical_obj.instructions)
-
-    def _parse_allowed_tools(self, tools_value: Any) -> List[str]:
-        """
-        Parse allowed-tools from comma-separated string or list.
-
-        Args:
-            tools_value: Either string "Tool1, Tool2" or list ["Tool1", "Tool2"]
-
-        Returns:
-            List of tool names/patterns
-        """
-        if isinstance(tools_value, str):
-            return [t.strip() for t in tools_value.split(',') if t.strip()]
-        elif isinstance(tools_value, list):
-            return tools_value
-        return []
 
     def _has_unclosed_quotes(self, yaml_content: str) -> bool:
         """

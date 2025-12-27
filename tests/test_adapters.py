@@ -188,42 +188,6 @@ Full agent instructions.
         with pytest.raises(ValueError, match="No YAML frontmatter found"):
             adapter.to_canonical(content, ConfigType.AGENT)
 
-    # Phase 3: Helper Method Tests
-
-    def test_parse_tools_comma_separated(self, adapter):
-        """Test tool parsing from comma-separated string."""
-        result = adapter._parse_tools("Read, Grep, Glob")
-        assert result == ["Read", "Grep", "Glob"]
-
-    def test_parse_tools_with_whitespace(self, adapter):
-        """Test tool parsing with extra whitespace."""
-        result = adapter._parse_tools("Read,  Grep  ,Glob")
-        assert result == ["Read", "Grep", "Glob"]
-
-    def test_parse_tools_as_list(self, adapter):
-        """Test tool parsing when already a list."""
-        result = adapter._parse_tools(["Read", "Grep"])
-        assert result == ["Read", "Grep"]
-
-    def test_parse_tools_empty(self, adapter):
-        """Test tool parsing with empty input."""
-        assert adapter._parse_tools("") == []
-        assert adapter._parse_tools(None) == []
-
-    def test_normalize_model_lowercase(self, adapter):
-        """Test model normalization to lowercase."""
-        assert adapter._normalize_model("Sonnet") == "sonnet"
-        assert adapter._normalize_model("OPUS") == "opus"
-
-    def test_normalize_model_already_lowercase(self, adapter):
-        """Test model normalization when already lowercase."""
-        assert adapter._normalize_model("opus") == "opus"
-        assert adapter._normalize_model("haiku") == "haiku"
-
-    def test_normalize_model_none(self, adapter):
-        """Test model normalization with None."""
-        assert adapter._normalize_model(None) is None
-
     # Phase 4: Additional Serialization Tests
 
     def test_from_canonical_basic(self, adapter, canonical_agent_sample):
@@ -391,7 +355,7 @@ Instructions.
     def test_conversion_warnings(self, adapter, sample_claude_content):
         """Test conversion warnings mechanism."""
         adapter.to_canonical(sample_claude_content, ConfigType.AGENT)
-        warnings = adapter.get_conversion_warnings()
+        warnings = adapter.get_warnings()
         assert isinstance(warnings, list)
 
     # ==================== SLASH-COMMAND TESTS ====================
@@ -868,22 +832,6 @@ Full agent instructions with all Copilot features.
         assert "argument-hint:" in output
         assert "handoffs:" in output
         assert "mcp-servers:" in output
-
-    def test_model_name_mapping(self, adapter):
-        """Test model name conversion between Copilot and canonical forms."""
-        # Test normalization (Copilot -> canonical)
-        assert adapter._normalize_model("Claude Sonnet 4") == "sonnet"
-        assert adapter._normalize_model("Claude Opus 4") == "opus"
-        assert adapter._normalize_model("Claude Haiku 4") == "haiku"
-        assert adapter._normalize_model("claude sonnet 4") == "sonnet"  # Case insensitive
-        assert adapter._normalize_model(None) is None
-        assert adapter._normalize_model("unknown-model") == "unknown-model"  # Pass through
-
-        # Test denormalization (canonical -> Copilot)
-        assert adapter._denormalize_model("sonnet") == "Claude Sonnet 4"
-        assert adapter._denormalize_model("opus") == "Claude Opus 4"
-        assert adapter._denormalize_model("haiku") == "Claude Haiku 4"
-        assert adapter._denormalize_model("unknown") == "unknown"  # Pass through
 
     def test_round_trip(self, adapter, full_copilot_content):
         """Test Copilot -> Canonical -> Copilot preserves all data."""

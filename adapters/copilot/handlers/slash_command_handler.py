@@ -6,6 +6,7 @@ and canonical representation.
 """
 
 from typing import Any, Dict, Optional, List
+from pathlib import Path
 from core.canonical_models import CanonicalSlashCommand, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
@@ -18,7 +19,7 @@ class CopilotSlashCommandHandler(ConfigTypeHandler):
     def config_type(self) -> ConfigType:
         return ConfigType.SLASH_COMMAND
 
-    def to_canonical(self, content: str) -> CanonicalSlashCommand:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalSlashCommand:
         """
         Convert Copilot prompt file to canonical.
 

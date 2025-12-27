@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 
 from core.adapter_interface import FormatAdapter
-from core.canonical_models import CanonicalAgent, CanonicalPermission, CanonicalSlashCommand, ConfigType
+from core.canonical_models import CanonicalAgent, CanonicalPermission, CanonicalSlashCommand, ConfigType, CanonicalConfig
 from .handlers.agent_handler import CopilotAgentHandler
 from .handlers.perm_handler import CopilotPermissionHandler
 from .handlers.slash_command_handler import CopilotSlashCommandHandler
@@ -56,7 +56,7 @@ class CopilotAdapter(FormatAdapter):
                 file_path.name.endswith('.perm.json') or
                 file_path.name.endswith('.prompt.md'))
 
-    def read(self, file_path: Path, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
+    def read(self, file_path: Path, config_type: ConfigType) -> CanonicalConfig:
         """Read file and convert to canonical."""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -65,9 +65,9 @@ class CopilotAdapter(FormatAdapter):
             raise ValueError(f"Permission denied: {file_path}")
         except FileNotFoundError:
             raise ValueError(f"File not found: {file_path}")
-        return self.to_canonical(content, config_type)
+        return self.to_canonical(content, config_type, file_path)
 
-    def write(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand],
+    def write(self, canonical_obj: CanonicalConfig,
               file_path: Path,
               config_type: ConfigType, options: dict = None):
         """Write canonical to file in Copilot format."""
@@ -80,20 +80,20 @@ class CopilotAdapter(FormatAdapter):
         except FileNotFoundError:
             raise ValueError(f"File not found: {file_path}")
 
-    def to_canonical(self, content: str, config_type: ConfigType) -> Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand]:
+    def to_canonical(self, content: str, config_type: ConfigType, file_path: Optional[Path] = None) -> CanonicalConfig:
         """Convert Copilot format to canonical (delegates to handler)."""
         self.warnings = []
         handler = self._get_handler(config_type)
-        return handler.to_canonical(content)
+        return handler.to_canonical(content, file_path)
 
-    def from_canonical(self, canonical_obj: Union[CanonicalAgent, CanonicalPermission, CanonicalSlashCommand], config_type: ConfigType,
+    def from_canonical(self, canonical_obj: CanonicalConfig, config_type: ConfigType,
                       options: Optional[Dict[str, Any]] = None) -> str:
         """Convert canonical to Copilot format (delegates to handler)."""
         self.warnings = []
         handler = self._get_handler(config_type)
         return handler.from_canonical(canonical_obj, options)
 
-    def get_conversion_warnings(self) -> List[str]:
+    def get_warnings(self) -> List[str]:
         return self.warnings
 
     def clear_conversion_warnings(self):
@@ -104,12 +104,3 @@ class CopilotAdapter(FormatAdapter):
         if config_type not in self._handlers:
             raise ValueError(f"Unsupported config type: {config_type}")
         return self._handlers[config_type]
-
-    # Delegation methods for backward compatibility with tests
-    def _normalize_model(self, model: Optional[str]) -> Optional[str]:
-        """Delegate to agent handler for backward compatibility."""
-        return self._handlers[ConfigType.AGENT]._normalize_model(model)
-
-    def _denormalize_model(self, model: str) -> str:
-        """Delegate to agent handler for backward compatibility."""
-        return self._handlers[ConfigType.AGENT]._denormalize_model(model)

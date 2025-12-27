@@ -6,9 +6,11 @@ and canonical representation.
 """
 
 from typing import Any, Dict, Optional, List
+from pathlib import Path
 from core.canonical_models import CanonicalAgent, ConfigType
 from adapters.shared.config_type_handler import ConfigTypeHandler
 from adapters.shared.frontmatter import parse_yaml_frontmatter, build_yaml_frontmatter
+from adapters.shared.utils import parse_tool_list
 
 
 class ClaudeAgentHandler(ConfigTypeHandler):
@@ -18,7 +20,7 @@ class ClaudeAgentHandler(ConfigTypeHandler):
     def config_type(self) -> ConfigType:
         return ConfigType.AGENT
 
-    def to_canonical(self, content: str) -> CanonicalAgent:
+    def to_canonical(self, content: str, file_path: Optional[Path] = None) -> CanonicalAgent:
         """
         Convert Claude agent file to canonical.
 
@@ -31,7 +33,7 @@ class ClaudeAgentHandler(ConfigTypeHandler):
             name=frontmatter.get('name', ''),
             description=frontmatter.get('description', ''),
             instructions=body,
-            tools=self._parse_tools(frontmatter.get('tools', '')),
+            tools=parse_tool_list(frontmatter.get('tools', '')),
             model=self._normalize_model(frontmatter.get('model')),
             source_format='claude'
         )
@@ -79,22 +81,6 @@ class ClaudeAgentHandler(ConfigTypeHandler):
             frontmatter['skills'] = canonical_obj.get_metadata('claude_skills')
 
         return build_yaml_frontmatter(frontmatter, canonical_obj.instructions)
-
-    def _parse_tools(self, tools_value: Any) -> List[str]:
-        """
-        Parse tools from comma-separated string or list.
-
-        Args:
-            tools_value: Either string "tool1, tool2" or list ["tool1", "tool2"]
-
-        Returns:
-            List of tool names
-        """
-        if isinstance(tools_value, str):
-            return [t.strip() for t in tools_value.split(',') if t.strip()]
-        elif isinstance(tools_value, list):
-            return tools_value
-        return []
 
     def _normalize_model(self, model: Optional[str]) -> Optional[str]:
         """
