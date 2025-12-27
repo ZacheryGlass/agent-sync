@@ -1777,3 +1777,171 @@ class TestPermissionSync:
         state = state_manager.get_file_state(source_dir, target_dir, "settings")
         assert state is not None
         assert state['last_action'] == 'source_to_target'
+
+
+class TestMergePermissions:
+    """Tests for _merge_permissions method."""
+
+    def test_merge_permissions_adds_new_rules(self):
+        """Test that new permission rules are added from source to target."""
+        from core.canonical_models import CanonicalPermission
+        
+        source = CanonicalPermission(
+            allow=["Bash(git:*)", "Bash(ls:*)"],
+            deny=[],
+            ask=[]
+        )
+        target = CanonicalPermission(
+            allow=["Bash(git:*)"],
+            deny=[],
+            ask=[]
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_permissions(source, target)
+
+        assert len(merged.allow) == 2
+        assert "Bash(git:*)" in merged.allow
+        assert "Bash(ls:*)" in merged.allow
+
+    def test_merge_permissions_avoids_duplicates(self):
+        """Test that duplicate rules are not added."""
+        from core.canonical_models import CanonicalPermission
+        
+        source = CanonicalPermission(
+            allow=["Bash(git:*)", "Bash(ls:*)"],
+            deny=[],
+            ask=[]
+        )
+        target = CanonicalPermission(
+            allow=["Bash(git:*)", "Bash(ls:*)"],
+            deny=[],
+            ask=[]
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_permissions(source, target)
+
+        assert len(merged.allow) == 2  # No duplicates
+        assert merged.allow.count("Bash(git:*)") == 1
+
+    def test_merge_permissions_preserves_target_rules(self):
+        """Test that target-only rules are preserved."""
+        from core.canonical_models import CanonicalPermission
+        
+        source = CanonicalPermission(
+            allow=["Bash(git:*)"],
+            deny=[],
+            ask=[]
+        )
+        target = CanonicalPermission(
+            allow=["Bash(git:*)", "Read"],
+            deny=[],
+            ask=[]
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_permissions(source, target)
+
+        assert len(merged.allow) == 2
+        assert "Bash(git:*)" in merged.allow
+        assert "Read" in merged.allow
+
+
+class TestSyncFilesInPlace:
+    """Tests for sync_files_in_place method."""
+
+    def test_sync_files_in_place_source_not_found(self, tmp_path):
+        """Test error when source file doesn't exist."""
+        source_file = tmp_path / "nonexistent.json"
+        target_file = tmp_path / "target.json"
+        target_file.write_text("{}")
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="claude",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        with pytest.raises(IOError, match="Source file not found"):
+            orchestrator.sync_files_in_place(
+                source_path=source_file,
+                target_path=target_file,
+                bidirectional=False,
+                dry_run=False
+            )
+
+    def test_sync_files_in_place_target_not_found(self, tmp_path):
+        """Test error when target file doesn't exist."""
+        source_file = tmp_path / "source.json"
+        target_file = tmp_path / "nonexistent.json"
+        source_file.write_text("{}")
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="claude",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        with pytest.raises(IOError, match="Target file not found"):
+            orchestrator.sync_files_in_place(
+                source_path=source_file,
+                target_path=target_file,
+                bidirectional=False,
+                dry_run=False
+            )
