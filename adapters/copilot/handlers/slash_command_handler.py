@@ -50,7 +50,7 @@ class CopilotSlashCommandHandler(ConfigTypeHandler):
             instructions=body,
             argument_hint=frontmatter.get('argument-hint'),
             model=frontmatter.get('model'),
-            allowed_tools=frontmatter.get('tools'),
+            allowed_tools=frontmatter.get('tools') or [],
             source_format='copilot'
         )
 

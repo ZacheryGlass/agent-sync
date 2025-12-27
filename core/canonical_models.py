@@ -27,7 +27,26 @@ class ConfigType(Enum):
 
 
 @dataclass
-class CanonicalAgent:
+class MetadataMixin:
+    """Mixin for handling format-specific metadata."""
+    
+    def add_metadata(self, key: str, value: Any):
+        """
+        Store format-specific field that may not have equivalents in other formats.
+        """
+        self.metadata[key] = value
+
+    def get_metadata(self, key: str, default=None):
+        """Retrieve format-specific metadata with optional default."""
+        return self.metadata.get(key, default)
+
+    def has_metadata(self, key: str) -> bool:
+        """Check if metadata key exists."""
+        return key in self.metadata
+
+
+@dataclass
+class CanonicalAgent(MetadataMixin):
     """
     Canonical representation of an AI agent configuration.
 
@@ -62,26 +81,18 @@ class CanonicalAgent:
     source_format: Optional[str] = None
     version: str = "1.0"
 
-    def add_metadata(self, key: str, value: Any):
-        """
-        Store format-specific field that may not have equivalents in other formats.
-
-        Example: Copilot's 'handoffs' feature doesn't exist in Claude, so we store
-        it in metadata to preserve it if we do a round-trip conversion.
-        """
-        self.metadata[key] = value
-
-    def get_metadata(self, key: str, default=None):
-        """Retrieve format-specific metadata with optional default."""
-        return self.metadata.get(key, default)
-
-    def has_metadata(self, key: str) -> bool:
-        """Check if metadata key exists."""
-        return key in self.metadata
+    def __post_init__(self):
+        """Validate required fields."""
+        if not self.name:
+            raise ValueError("CanonicalAgent must have a non-empty name")
+        if not self.description:
+            raise ValueError("CanonicalAgent must have a non-empty description")
+        if not self.instructions:
+            raise ValueError("CanonicalAgent must have non-empty instructions")
 
 
 @dataclass
-class CanonicalPermission:
+class CanonicalPermission(MetadataMixin):
     """
     Canonical representation of permission/security configuration.
 
@@ -94,7 +105,7 @@ class CanonicalPermission:
         allow: List of explicitly allowed operations/paths
         deny: List of explicitly denied operations/paths
         ask: List of operations that require user confirmation
-        default_mode: Default permission behavior (allow, deny, ask)
+        default_mode: Default permission behavior. Valid values: 'allow', 'deny', 'ask', or None.
         metadata: Format-specific permission settings
         source_format: Original format
     """
@@ -106,26 +117,9 @@ class CanonicalPermission:
     source_format: Optional[str] = None
     version: str = "1.0"
 
-    def add_metadata(self, key: str, value: Any):
-        """
-        Store format-specific field that may not have equivalents in other formats.
-
-        Example: VS Code's split URL approvals (approveRequest vs approveResponse)
-        don't exist in Claude, so we store them in metadata for round-trip fidelity.
-        """
-        self.metadata[key] = value
-
-    def get_metadata(self, key: str, default=None):
-        """Retrieve format-specific metadata with optional default."""
-        return self.metadata.get(key, default)
-
-    def has_metadata(self, key: str) -> bool:
-        """Check if metadata key exists."""
-        return key in self.metadata
-
 
 @dataclass
-class CanonicalSlashCommand:
+class CanonicalSlashCommand(MetadataMixin):
     """
     Canonical representation of a slash command / prompt file.
 
@@ -169,7 +163,7 @@ class CanonicalSlashCommand:
     # Optional fields (format-dependent)
     argument_hint: Optional[str] = None
     model: Optional[str] = None
-    allowed_tools: Optional[List[str]] = field(default_factory=list)
+    allowed_tools: List[str] = field(default_factory=list)
 
     # Extended attributes (format-specific, preserved for round-trips)
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -178,19 +172,15 @@ class CanonicalSlashCommand:
     source_format: Optional[str] = None
     version: str = "1.0"
 
-    def add_metadata(self, key: str, value: Any):
-        """
-        Store format-specific field that may not have equivalents in other formats.
+    def __post_init__(self):
+        """Validate required fields."""
+        if not self.name:
+            raise ValueError("CanonicalSlashCommand must have a non-empty name")
+        if not self.description:
+            raise ValueError("CanonicalSlashCommand must have a non-empty description")
+        if not self.instructions:
+            raise ValueError("CanonicalSlashCommand must have non-empty instructions")
+        
+        if self.allowed_tools is None:
+             self.allowed_tools = []
 
-        Example: Copilot's 'agent' field doesn't exist in Claude, so we store
-        it in metadata to preserve it if we do a round-trip conversion.
-        """
-        self.metadata[key] = value
-
-    def get_metadata(self, key: str, default=None):
-        """Retrieve format-specific metadata with optional default."""
-        return self.metadata.get(key, default)
-
-    def has_metadata(self, key: str) -> bool:
-        """Check if metadata key exists."""
-        return key in self.metadata
