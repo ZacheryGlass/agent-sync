@@ -105,6 +105,9 @@ class CopilotSlashCommandHandler(ConfigTypeHandler):
         """
         Check for unclosed quotes in YAML content.
 
+        Note: This is a simple heuristic and does not support multiline strings (|, >).
+        It handles comments by ignoring text after # until newline.
+
         Args:
             yaml_content: YAML frontmatter content (without --- delimiters)
 
@@ -114,11 +117,19 @@ class CopilotSlashCommandHandler(ConfigTypeHandler):
         in_single = False
         in_double = False
         i = 0
-        while i < len(yaml_content):
+        length = len(yaml_content)
+
+        while i < length:
             char = yaml_content[i]
 
+            # Handle comments: if # and not in quotes, skip to newline
+            if char == '#' and not in_single and not in_double:
+                while i < length and yaml_content[i] != '\n':
+                    i += 1
+                continue
+
             # Handle escapes
-            if char == '\\' and i + 1 < len(yaml_content):
+            if char == '\\' and i + 1 < length:
                 i += 2
                 continue
 
