@@ -10,10 +10,10 @@ readme = "README.md"
 authors = [
   { name = "Zachery Glass", email = "ZacheryGlass@users.noreply.github.com" },
 ]
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
 requires-python = ">=3.12"
