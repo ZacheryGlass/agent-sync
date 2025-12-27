@@ -644,7 +644,7 @@ class UniversalSyncOrchestrator:
             self.log(f"  Direction: {self.source_format} -> {self.target_format}")
         if dry_run:
             self.log("  Mode: DRY RUN (no changes will be made)")
-        self.logger()
+        self.log("")  # Blank line for readability
 
         try:
             # Validate files exist
@@ -653,8 +653,7 @@ class UniversalSyncOrchestrator:
             if not target_path.exists():
                 raise IOError(f"Target file not found: {target_path}")
 
-            # 1. Read both files
-            source_content = source_path.read_text(encoding='utf-8')
+            # 1. Read target content for comparison
             target_content = target_path.read_text(encoding='utf-8')
 
             # 2. Convert both to canonical
@@ -674,20 +673,27 @@ class UniversalSyncOrchestrator:
                 self.conversion_options
             )
 
-            # 5. Write target (unless dry run)
+            # 5. Write target (unless dry run or no changes)
+            target_changed = merged_content != target_content
             if not dry_run:
-                target_path.write_text(merged_content, encoding='utf-8')
-                self.logger(f"Updated {self.target_format}: {target_path}")
+                if target_changed:
+                    target_path.write_text(merged_content, encoding='utf-8')
+                    self.logger(f"Updated {self.target_format}: {target_path}")
+                    self.stats['source_to_target'] += 1
+                else:
+                    self.logger(f"No changes needed for {self.target_format}: {target_path}")
             else:
-                if merged_content != target_content:
+                if target_changed:
                     self.logger(f"Would update {self.target_format}: {target_path}")
+                    self.stats['source_to_target'] += 1
                 else:
                     self.logger(f"No changes needed for {self.target_format}: {target_path}")
 
-            self.stats['source_to_target'] += 1
-
             # 6. If bidirectional, merge target changes back into source
             if bidirectional:
+                # Read source content for comparison
+                source_content = source_path.read_text(encoding='utf-8')
+                
                 merged_target_canonical = self.target_adapter.read(target_path, self.config_type) if not dry_run else merged_canonical
 
                 # Merge target into source
@@ -703,17 +709,21 @@ class UniversalSyncOrchestrator:
                     self.conversion_options
                 )
 
-                # Write source (unless dry run)
+                # Write source (unless dry run or no changes)
+                source_changed = source_merged_content != source_content
                 if not dry_run:
-                    source_path.write_text(source_merged_content, encoding='utf-8')
-                    self.logger(f"Updated {self.source_format}: {source_path}")
-                else:
-                    if source_merged_content != source_content:
-                        self.logger(f"Would update {self.source_format}: {source_path}")
+                    if source_changed:
+                        source_path.write_text(source_merged_content, encoding='utf-8')
+                        self.logger(f"Updated {self.source_format}: {source_path}")
+                        self.stats['target_to_source'] += 1
                     else:
                         self.logger(f"No changes needed for {self.source_format}: {source_path}")
-
-                self.stats['target_to_source'] += 1
+                else:
+                    if source_changed:
+                        self.logger(f"Would update {self.source_format}: {source_path}")
+                        self.stats['target_to_source'] += 1
+                    else:
+                        self.logger(f"No changes needed for {self.source_format}: {source_path}")
 
             self._print_summary()
 
@@ -781,7 +791,11 @@ class UniversalSyncOrchestrator:
     def _merge_agents(self, source, target):
         """Merge agent from source into target.
 
-        For single-file sync, source agent replaces target agent entirely.
+        Merging strategy:
+        - Core fields (name, description, instructions, tools, version) come from source
+        - Model falls back to target if source is None
+        - Target metadata is preserved, with source metadata merged in (source wins conflicts)
+        - Target source_format is preserved for round-trip compatibility
         """
         merged = CanonicalAgent(
             name=source.name,
@@ -803,7 +817,11 @@ class UniversalSyncOrchestrator:
     def _merge_slash_commands(self, source, target):
         """Merge slash command from source into target.
 
-        For single-file sync, source command replaces target command entirely.
+        Merging strategy:
+        - Core fields (name, description, instructions, allowed_tools, version) come from source
+        - argument_hint and model fall back to target if source is None
+        - Target metadata is preserved, with source metadata merged in (source wins conflicts)
+        - Target source_format is preserved for round-trip compatibility
         """
         merged = CanonicalSlashCommand(
             name=source.name,

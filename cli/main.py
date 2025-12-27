@@ -480,7 +480,7 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run,
                 force=args.force,
                 verbose=args.verbose,
-                conversion_options=conversion_options or None
+                conversion_options=conversion_options
             )
 
             # Run in-place sync

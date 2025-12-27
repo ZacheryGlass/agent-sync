@@ -9,11 +9,13 @@ Tests cover:
 - State tracking
 """
 
+import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch
 import time
 
+from cli.main import main, EXIT_SUCCESS, EXIT_ERROR
 from core.orchestrator import UniversalSyncOrchestrator, FilePair
 from core.registry import FormatRegistry
 from core.state_manager import SyncStateManager
@@ -1945,3 +1947,533 @@ class TestSyncFilesInPlace:
                 bidirectional=False,
                 dry_run=False
             )
+
+    def test_sync_files_in_place_happy_path_permissions(self, tmp_path):
+        """Test successful in-place merge of permission files."""
+        # Create source with additional rules
+        source_file = tmp_path / "source_settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)", "Bash(ls:*)"],
+                "deny": ["Bash(rm:*)"],
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        # Create target with some overlapping and some unique rules
+        target_file = tmp_path / "target_settings.json"
+        target_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)", "Read"],
+                "deny": [],
+                "ask": ["Write"]
+            }
+        }
+        target_file.write_text(json.dumps(target_content))
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="claude",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=False,
+            dry_run=False
+        )
+
+        # Verify merged result
+        result = json.loads(target_file.read_text())
+        assert "Bash(git:*)" in result["permissions"]["allow"]
+        assert "Bash(ls:*)" in result["permissions"]["allow"]
+        assert "Read" in result["permissions"]["allow"]
+        assert "Bash(rm:*)" in result["permissions"]["deny"]
+        assert "Write" in result["permissions"]["ask"]
+
+    def test_sync_files_in_place_dry_run_no_changes(self, tmp_path):
+        """Test dry-run mode doesn't modify files."""
+        source_file = tmp_path / "source_settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)", "NewRule"],
+                "deny": [],
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        target_file = tmp_path / "target_settings.json"
+        original_target = {
+            "permissions": {
+                "allow": ["Bash(git:*)"],
+                "deny": [],
+                "ask": []
+            }
+        }
+        target_file.write_text(json.dumps(original_target))
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="claude",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=False,
+            dry_run=True
+        )
+
+        # Verify file was NOT modified
+        result = json.loads(target_file.read_text())
+        assert result == original_target
+        assert "NewRule" not in result["permissions"]["allow"]
+
+    def test_sync_files_in_place_bidirectional(self, tmp_path):
+        """Test bidirectional sync merges both files."""
+        source_file = tmp_path / "source_settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["SourceOnlyRule", "SharedRule"],
+                "deny": [],
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        target_file = tmp_path / "target_settings.json"
+        target_content = {
+            "permissions": {
+                "allow": ["TargetOnlyRule", "SharedRule"],
+                "deny": [],
+                "ask": []
+            }
+        }
+        target_file.write_text(json.dumps(target_content))
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="claude",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=True,
+            dry_run=False
+        )
+
+        # Verify both files have all rules
+        source_result = json.loads(source_file.read_text())
+        target_result = json.loads(target_file.read_text())
+
+        # Target should have source rules merged in
+        assert "SourceOnlyRule" in target_result["permissions"]["allow"]
+        assert "TargetOnlyRule" in target_result["permissions"]["allow"]
+        assert "SharedRule" in target_result["permissions"]["allow"]
+
+        # Source should have target rules merged in
+        assert "SourceOnlyRule" in source_result["permissions"]["allow"]
+        assert "TargetOnlyRule" in source_result["permissions"]["allow"]
+        assert "SharedRule" in source_result["permissions"]["allow"]
+
+    def test_sync_files_in_place_no_changes_needed(self, tmp_path):
+        """Test stats not incremented when no changes needed.
+        
+        Note: Both files must be in the adapter's canonical output format
+        (pretty-printed JSON) for this test to pass, since the adapter
+        normalizes output formatting.
+        """
+        source_file = tmp_path / "source_settings.json"
+        # Use pretty-printed JSON that matches adapter output format
+        content = """{
+  "permissions": {
+    "allow": [
+      "SameRule"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}"""
+        source_file.write_text(content)
+
+        target_file = tmp_path / "target_settings.json"
+        target_file.write_text(content)
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="claude",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=False,
+            dry_run=False
+        )
+
+        # Stats should NOT be incremented when no changes made
+        assert orchestrator.stats['source_to_target'] == 0
+
+
+class TestMergeAgents:
+    """Tests for _merge_agents method."""
+
+    def test_merge_agents_uses_source_core_fields(self):
+        """Test that core fields come from source agent."""
+        from core.canonical_models import CanonicalAgent
+
+        source = CanonicalAgent(
+            name="source-agent",
+            description="Source description",
+            instructions="Source instructions",
+            tools=["tool1", "tool2"],
+            model="sonnet",
+            version="2.0"
+        )
+        target = CanonicalAgent(
+            name="target-agent",
+            description="Target description",
+            instructions="Target instructions",
+            tools=["tool3"],
+            model="opus",
+            version="1.0"
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_agents(source, target)
+
+        assert merged.name == "source-agent"
+        assert merged.description == "Source description"
+        assert merged.instructions == "Source instructions"
+        assert merged.tools == ["tool1", "tool2"]
+        assert merged.model == "sonnet"
+        assert merged.version == "2.0"
+
+    def test_merge_agents_falls_back_to_target_model(self):
+        """Test that model falls back to target if source is None."""
+        from core.canonical_models import CanonicalAgent
+
+        source = CanonicalAgent(
+            name="agent",
+            description="Description",
+            instructions="Instructions",
+            model=None
+        )
+        target = CanonicalAgent(
+            name="agent",
+            description="Description",
+            instructions="Instructions",
+            model="opus"
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_agents(source, target)
+
+        assert merged.model == "opus"
+
+    def test_merge_agents_preserves_and_merges_metadata(self):
+        """Test that metadata is merged with target preserved and source added."""
+        from core.canonical_models import CanonicalAgent
+
+        source = CanonicalAgent(
+            name="agent",
+            description="Description",
+            instructions="Instructions",
+            metadata={"source_key": "source_value", "shared_key": "source_wins"}
+        )
+        target = CanonicalAgent(
+            name="agent",
+            description="Description",
+            instructions="Instructions",
+            metadata={"target_key": "target_value", "shared_key": "target_value"},
+            source_format="copilot"
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.AGENT,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_agents(source, target)
+
+        # Target metadata preserved
+        assert merged.metadata["target_key"] == "target_value"
+        # Source metadata added (but doesn't overwrite existing)
+        assert merged.metadata["source_key"] == "source_value"
+        # Target source_format preserved
+        assert merged.source_format == "copilot"
+
+
+class TestMergeSlashCommands:
+    """Tests for _merge_slash_commands method."""
+
+    def test_merge_slash_commands_uses_source_core_fields(self):
+        """Test that core fields come from source slash command."""
+        from core.canonical_models import CanonicalSlashCommand
+
+        source = CanonicalSlashCommand(
+            name="source-cmd",
+            description="Source description",
+            instructions="Source instructions",
+            allowed_tools=["tool1", "tool2"],
+            argument_hint="source hint",
+            model="sonnet",
+            version="2.0"
+        )
+        target = CanonicalSlashCommand(
+            name="target-cmd",
+            description="Target description",
+            instructions="Target instructions",
+            allowed_tools=["tool3"],
+            argument_hint="target hint",
+            model="opus",
+            version="1.0"
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_slash_commands(source, target)
+
+        assert merged.name == "source-cmd"
+        assert merged.description == "Source description"
+        assert merged.instructions == "Source instructions"
+        assert merged.allowed_tools == ["tool1", "tool2"]
+        assert merged.argument_hint == "source hint"
+        assert merged.model == "sonnet"
+        assert merged.version == "2.0"
+
+    def test_merge_slash_commands_falls_back_to_target(self):
+        """Test fallback to target for argument_hint and model."""
+        from core.canonical_models import CanonicalSlashCommand
+
+        source = CanonicalSlashCommand(
+            name="cmd",
+            description="Description",
+            instructions="Instructions",
+            argument_hint=None,
+            model=None
+        )
+        target = CanonicalSlashCommand(
+            name="cmd",
+            description="Description",
+            instructions="Instructions",
+            argument_hint="target hint",
+            model="opus"
+        )
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=Path("/tmp/source"),
+            target_dir=Path("/tmp/target"),
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        merged = orchestrator._merge_slash_commands(source, target)
+
+        assert merged.argument_hint == "target hint"
+        assert merged.model == "opus"
+
+
+class TestSyncFileCLI:
+    """Tests for --sync-file CLI argument parsing and validation."""
+
+    def test_sync_file_requires_target_file(self, tmp_path):
+        """Test that --sync-file requires --target-file."""
+        source_file = tmp_path / "source.json"
+        source_file.write_text('{"permissions": {"allow": [], "deny": [], "ask": []}}')
+
+        result = main([
+            '--sync-file', str(source_file),
+            '--source-format', 'claude',
+            '--target-format', 'claude',
+            '--config-type', 'permission'
+        ])
+
+        assert result == EXIT_ERROR
+
+    def test_sync_file_requires_formats(self, tmp_path):
+        """Test that --sync-file requires format arguments."""
+        source_file = tmp_path / "source.json"
+        target_file = tmp_path / "target.json"
+        source_file.write_text('{"permissions": {"allow": [], "deny": [], "ask": []}}')
+        target_file.write_text('{"permissions": {"allow": [], "deny": [], "ask": []}}')
+
+        # Missing --source-format and --target-format
+        result = main([
+            '--sync-file', str(source_file),
+            '--target-file', str(target_file),
+            '--config-type', 'permission'
+        ])
+
+        assert result == EXIT_ERROR
+
+    def test_sync_file_mutual_exclusivity_with_source_dir(self, tmp_path):
+        """Test that --sync-file is mutually exclusive with --source-dir."""
+        source_file = tmp_path / "source.json"
+        target_file = tmp_path / "target.json"
+        source_file.write_text('{"permissions": {"allow": [], "deny": [], "ask": []}}')
+        target_file.write_text('{"permissions": {"allow": [], "deny": [], "ask": []}}')
+
+        result = main([
+            '--sync-file', str(source_file),
+            '--target-file', str(target_file),
+            '--source-dir', str(tmp_path),
+            '--source-format', 'claude',
+            '--target-format', 'claude',
+            '--config-type', 'permission'
+        ])
+
+        assert result == EXIT_ERROR
+
+    def test_sync_file_success(self, tmp_path):
+        """Test successful --sync-file invocation."""
+        source_file = tmp_path / "source.json"
+        target_file = tmp_path / "target.json"
+        source_file.write_text('{"permissions": {"allow": ["NewRule"], "deny": [], "ask": []}}')
+        target_file.write_text('{"permissions": {"allow": ["ExistingRule"], "deny": [], "ask": []}}')
+
+        result = main([
+            '--sync-file', str(source_file),
+            '--target-file', str(target_file),
+            '--source-format', 'claude',
+            '--target-format', 'claude',
+            '--config-type', 'permission'
+        ])
+
+        assert result == EXIT_SUCCESS
+
+        # Verify merge happened
+        merged = json.loads(target_file.read_text())
+        assert "NewRule" in merged["permissions"]["allow"]
+        assert "ExistingRule" in merged["permissions"]["allow"]
+
+    def test_sync_file_with_bidirectional(self, tmp_path):
+        """Test --sync-file with --bidirectional flag."""
+        source_file = tmp_path / "source.json"
+        target_file = tmp_path / "target.json"
+        source_file.write_text('{"permissions": {"allow": ["SourceRule"], "deny": [], "ask": []}}')
+        target_file.write_text('{"permissions": {"allow": ["TargetRule"], "deny": [], "ask": []}}')
+
+        result = main([
+            '--sync-file', str(source_file),
+            '--target-file', str(target_file),
+            '--source-format', 'claude',
+            '--target-format', 'claude',
+            '--config-type', 'permission',
+            '--bidirectional'
+        ])
+
+        assert result == EXIT_SUCCESS
+
+        # Verify bidirectional merge
+        source_merged = json.loads(source_file.read_text())
+        target_merged = json.loads(target_file.read_text())
+
+        assert "SourceRule" in target_merged["permissions"]["allow"]
+        assert "TargetRule" in target_merged["permissions"]["allow"]
+        assert "SourceRule" in source_merged["permissions"]["allow"]
+        assert "TargetRule" in source_merged["permissions"]["allow"]
+
+    def test_sync_file_source_not_found(self, tmp_path):
+        """Test error when source file doesn't exist via CLI."""
+        target_file = tmp_path / "target.json"
+        target_file.write_text('{"permissions": {"allow": [], "deny": [], "ask": []}}')
+
+        result = main([
+            '--sync-file', str(tmp_path / "nonexistent.json"),
+            '--target-file', str(target_file),
+            '--source-format', 'claude',
+            '--target-format', 'claude',
+            '--config-type', 'permission'
+        ])
+
+        assert result == EXIT_ERROR
