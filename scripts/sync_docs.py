@@ -143,8 +143,7 @@ def add_frontmatter(content: str, source_url: str, title: str) -> str:
         Markdown with frontmatter
     """
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    frontmatter = f"""
----
+    frontmatter = f"""---
 title: {title}
 source_url: {source_url}
 fetched_at: {timestamp}
