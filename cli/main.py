@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -374,10 +375,19 @@ def main(argv: Optional[list] = None):
             return 1
 
         # Target directory doesn't need to exist (will be created if needed)
-        # but if it exists, it must be a directory
-        if target_dir.exists() and not target_dir.is_dir():
-            print(f"Error: Target path exists but is not a directory: {target_dir}", file=sys.stderr)
-            return 1
+        # but if it exists, it must be a directory and writable
+        if target_dir.exists():
+            if not target_dir.is_dir():
+                print(f"Error: Target path exists but is not a directory: {target_dir}", file=sys.stderr)
+                return 1
+            if not os.access(target_dir, os.W_OK):
+                print(f"Error: Target directory is not writable: {target_dir}", file=sys.stderr)
+                return 1
+        else:
+            # If it doesn't exist, check if parent is writable
+            if not os.access(target_dir.parent, os.W_OK):
+                print(f"Error: Target parent directory is not writable: {target_dir.parent}", file=sys.stderr)
+                return 1
 
         # 2. Convert config_type string to ConfigType enum
         config_type = CONFIG_TYPE_MAP[args.config_type]
