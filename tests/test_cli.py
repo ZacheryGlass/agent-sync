@@ -980,8 +980,10 @@ class TestCLIPermissionSupport:
             mock_target_adapter = MagicMock()
             
             mock_source_adapter.format_name = "claude"
+            mock_source_adapter.get_file_extension.return_value = ".json"
             mock_target_adapter.format_name = "copilot"
             mock_target_adapter.file_extension = ".perm.json"
+            mock_target_adapter.get_file_extension.return_value = ".perm.json"
             mock_target_adapter.from_canonical.return_value = "mock content"
             
             mock_registry.get_adapter.side_effect = lambda fmt: {
