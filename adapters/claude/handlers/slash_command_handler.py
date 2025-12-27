@@ -31,10 +31,14 @@ class ClaudeSlashCommandHandler(ConfigTypeHandler):
         # Try to parse frontmatter, but handle case where it's missing
         try:
             frontmatter, body = parse_yaml_frontmatter(content)
-        except ValueError:
-            # No frontmatter found, treat entire content as body
-            frontmatter = {}
-            body = content.strip()
+        except ValueError as e:
+            if "No YAML frontmatter found" in str(e):
+                # No frontmatter found, treat entire content as body
+                frontmatter = {}
+                body = content.strip()
+            else:
+                # Re-raise other ValueErrors
+                raise
 
         # Validate frontmatter - check for obvious syntax errors like unclosed quotes
         if frontmatter and not isinstance(frontmatter, dict):
