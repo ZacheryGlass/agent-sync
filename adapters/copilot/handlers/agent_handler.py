@@ -41,11 +41,15 @@ class CopilotAgentHandler(ConfigTypeHandler):
         frontmatter, body = parse_yaml_frontmatter(content)
 
         # Create canonical agent
+        tools = frontmatter.get('tools', [])
+        if tools and not isinstance(tools, list):
+            raise ValueError(f"Tools must be a list, got {type(tools).__name__}")
+
         agent = CanonicalAgent(
             name=frontmatter.get('name', ''),
             description=frontmatter.get('description', ''),
             instructions=body,
-            tools=frontmatter.get('tools', []) if isinstance(frontmatter.get('tools'), list) else [],
+            tools=tools,
             model=self._normalize_model(frontmatter.get('model')),
             source_format='copilot'
         )
