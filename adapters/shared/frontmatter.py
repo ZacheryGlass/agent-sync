@@ -53,7 +53,9 @@ def parse_yaml_frontmatter(content: str) -> Tuple[dict, str]:
 
     yaml_content, body = match.groups()
     try:
-        frontmatter = yaml.safe_load(yaml_content) or {}
+        frontmatter = yaml.safe_load(yaml_content)
+        if frontmatter is None:
+            frontmatter = {}
     except yaml.YAMLError:
         # Fallback to loose parsing for malformed YAML
         # (e.g. unquoted multiline strings without indentation)
@@ -132,5 +134,8 @@ def build_yaml_frontmatter(frontmatter: dict, body: str) -> str:
         >>> 'name: agent' in result
         True
     """
+    if not frontmatter:
+        return body + "\n"
+        
     yaml_str = yaml.dump(frontmatter, default_flow_style=False, sort_keys=False)
     return f"---\n{yaml_str}---\n{body}\n"
