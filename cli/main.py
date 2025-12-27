@@ -239,19 +239,22 @@ def convert_single_file(args) -> int:
         print("Error: --target-format or --output required for conversion", file=sys.stderr)
         return 1
 
-    # 4. Determine output path (explicit or auto-generate)
+    # 4. Get config type
+    config_type = CONFIG_TYPE_MAP[args.config_type]
+
+    # 5. Determine output path (explicit or auto-generate)
     if args.output:
         output_file = args.output.expanduser().resolve()
     else:
         # Auto-generate: same directory, base name + target extension
-        base_name = source_file.stem
-        # Handle .agent.md extension specially
-        if source_file.name.endswith('.agent.md'):
-            base_name = source_file.name[:-9]  # Remove .agent.md
-        output_file = source_file.parent / f"{base_name}{target_adapter.file_extension}"
-
-    # 5. Get config type
-    config_type = CONFIG_TYPE_MAP[args.config_type]
+        source_ext = source_adapter.get_file_extension(config_type)
+        if source_file.name.endswith(source_ext):
+            base_name = source_file.name[:-len(source_ext)]
+        else:
+            base_name = source_file.stem
+        
+        target_ext = target_adapter.get_file_extension(config_type)
+        output_file = source_file.parent / f"{base_name}{target_ext}"
 
     # 6. Build conversion options
     conversion_options = {}
