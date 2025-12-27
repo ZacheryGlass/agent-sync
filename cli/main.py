@@ -27,7 +27,7 @@ from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
 
 # Import adapters
-from adapters import ClaudeAdapter, CopilotAdapter
+from adapters import ClaudeAdapter, CopilotAdapter, GeminiAdapter
 
 # Mapping from CLI string to ConfigType enum (single source of truth)
 CONFIG_TYPE_MAP = {
@@ -243,6 +243,7 @@ def setup_registry() -> FormatRegistry:
     # Register adapters
     registry.register(ClaudeAdapter())
     registry.register(CopilotAdapter())
+    registry.register(GeminiAdapter())
 
     return registry
 

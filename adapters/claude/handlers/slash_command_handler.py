@@ -65,9 +65,14 @@ class ClaudeSlashCommandHandler(ConfigTypeHandler):
             # Convert single-element list back to string representation
             argument_hint = f"[{argument_hint[0]}]"
 
+        # Claude format requires description
+        description = frontmatter.get('description', '')
+        if not description:
+            raise ValueError("Claude slash commands must have a non-empty description")
+
         slash_command = CanonicalSlashCommand(
             name=name,
-            description=frontmatter.get('description', ''),
+            description=description,
             instructions=body,
             argument_hint=argument_hint,
             model=frontmatter.get('model'),

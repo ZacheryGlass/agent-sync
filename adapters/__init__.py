@@ -11,6 +11,7 @@ AI coding tool. Each adapter knows how to:
 Available adapters:
 - ClaudeAdapter: Claude Code (.md files for agents, settings.json for permissions)
 - CopilotAdapter: GitHub Copilot (.agent.md files)
+- GeminiAdapter: Google Gemini CLI (.toml files for custom commands)
 - ExampleAdapter: Template for new implementations
 
 Adding a new adapter:
@@ -21,10 +22,12 @@ Adding a new adapter:
 
 from .claude.adapter import ClaudeAdapter
 from .copilot.adapter import CopilotAdapter
+from .gemini.adapter import GeminiAdapter
 from .example.adapter import ExampleAdapter
 
 __all__ = [
     'ClaudeAdapter',
     'CopilotAdapter',
+    'GeminiAdapter',
     'ExampleAdapter',
 ]

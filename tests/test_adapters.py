@@ -1818,7 +1818,7 @@ User args: {{args}}
 
     def test_edge_case_special_characters_in_toml(self, adapter):
         """Test TOML escaping of special characters."""
-        content = '''description = "Test with \"quotes\" and 'apostrophes'"
+        content = '''description = "Test with \\"quotes\\" and 'apostrophes'"
 
 prompt = """
 Special chars: "double quotes", 'single quotes', backslash\\

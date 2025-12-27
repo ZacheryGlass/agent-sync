@@ -176,11 +176,11 @@ class CanonicalSlashCommand(MetadataMixin):
         """Validate required fields."""
         if not self.name:
             raise ValueError("CanonicalSlashCommand must have a non-empty name")
-        if not self.description:
-            raise ValueError("CanonicalSlashCommand must have a non-empty description")
+        # Note: description is optional in some formats (e.g., Gemini)
+        # Format-specific adapters can validate it if needed
         if not self.instructions:
             raise ValueError("CanonicalSlashCommand must have non-empty instructions")
-        
+
         if self.allowed_tools is None:
              self.allowed_tools = []
 

@@ -158,12 +158,12 @@ class TestCanonicalSlashCommand:
         """Test that validation fails for empty required fields."""
         with pytest.raises(ValueError, match="name"):
             CanonicalSlashCommand(name="", description="desc", instructions="inst")
-            
-        with pytest.raises(ValueError, match="description"):
-            CanonicalSlashCommand(name="name", description="", instructions="inst")
-            
+
+        # Note: description is optional in some formats (e.g., Gemini)
+        # Format-specific adapters can validate it if needed
+
         with pytest.raises(ValueError, match="instructions"):
-            CanonicalSlashCommand(name="name", description="desc", instructions="")
+            CanonicalSlashCommand(name="name", description="", instructions="")
 
 
 class TestConfigType:
