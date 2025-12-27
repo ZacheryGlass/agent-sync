@@ -36,9 +36,9 @@ class ClaudePermissionHandler(ConfigTypeHandler):
             permissions = {}
 
         return CanonicalPermission(
-            allow=permissions.get('allow', []),
-            deny=permissions.get('deny', []),
-            ask=permissions.get('ask', []),
+            allow=permissions.get('allow') or [],
+            deny=permissions.get('deny') or [],
+            ask=permissions.get('ask') or [],
             source_format='claude'
         )
 
