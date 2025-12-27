@@ -422,6 +422,10 @@ class UniversalSyncOrchestrator:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     self.target_adapter.write(canonical, target_path, self.config_type,
                                               self.conversion_options)
+                    
+                    if not target_path.exists():
+                        raise IOError(f"Adapter write failed: file not found at {target_path}")
+
                     target_mtime = target_path.stat().st_mtime
                 else:
                     target_mtime = pair.target_mtime
@@ -464,6 +468,10 @@ class UniversalSyncOrchestrator:
                     source_path.parent.mkdir(parents=True, exist_ok=True)
                     self.source_adapter.write(canonical, source_path, self.config_type,
                                               self.conversion_options)
+                    
+                    if not source_path.exists():
+                        raise IOError(f"Adapter write failed: file not found at {source_path}")
+
                     source_mtime = source_path.stat().st_mtime
                 else:
                     source_mtime = pair.source_mtime
