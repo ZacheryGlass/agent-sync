@@ -28,7 +28,7 @@ pip install agent-sync
 
 If you prefer to build from source:
 
-**Requirements:** Python 3.12+
+**Requirements:** Python 3.8+
 
 ```bash
 # Clone the repository
