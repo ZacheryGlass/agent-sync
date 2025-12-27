@@ -198,6 +198,12 @@ Examples:
     )
 
     parser.add_argument(
+        '--strict',
+        action='store_true',
+        help='Error on lossy conversions (e.g., Claude deny rules downgraded to VS Code ask)'
+    )
+
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Verbose output with detailed logging'
@@ -332,6 +338,17 @@ def convert_single_file(args) -> int:
             canonical, config_type, conversion_options if conversion_options else None
         )
 
+        # Check for conversion warnings
+        warnings = target_adapter.get_warnings()
+        if warnings:
+            print("\nConversion warnings:", file=sys.stderr)
+            for warning in warnings:
+                print(f"  - {warning}", file=sys.stderr)
+
+            if args.strict:
+                print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
+                return EXIT_ERROR
+
         if args.dry_run:
             print(f"Would write to: {output_file}")
             if args.verbose:
@@ -462,6 +479,16 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run
             )
 
+            # Check for conversion warnings with --strict
+            source_warnings = orchestrator.source_adapter.get_warnings()
+            target_warnings = orchestrator.target_adapter.get_warnings()
+            all_warnings = source_warnings + target_warnings
+
+            if all_warnings and args.strict:
+                print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
+                print("See warnings above for details.", file=sys.stderr)
+                return EXIT_ERROR
+
             return EXIT_SUCCESS
 
         except KeyboardInterrupt:
@@ -549,6 +576,16 @@ def main(argv: Optional[list] = None):
 
         # 7. Run sync
         orchestrator.sync()
+
+        # 8. Check for conversion warnings with --strict
+        source_warnings = orchestrator.source_adapter.get_warnings()
+        target_warnings = orchestrator.target_adapter.get_warnings()
+        all_warnings = source_warnings + target_warnings
+
+        if all_warnings and args.strict:
+            print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
+            print("See warnings above for details.", file=sys.stderr)
+            return EXIT_ERROR
 
         # Success
         return EXIT_SUCCESS

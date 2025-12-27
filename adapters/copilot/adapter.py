@@ -91,7 +91,12 @@ class CopilotAdapter(FormatAdapter):
         """Convert canonical to Copilot format (delegates to handler)."""
         self.warnings = []
         handler = self._get_handler(config_type)
-        return handler.from_canonical(canonical_obj, options)
+
+        # Pass adapter reference to handler so it can append warnings
+        handler_options = options.copy() if options else {}
+        handler_options['adapter'] = self
+
+        return handler.from_canonical(canonical_obj, handler_options)
 
     def get_warnings(self) -> List[str]:
         return self.warnings

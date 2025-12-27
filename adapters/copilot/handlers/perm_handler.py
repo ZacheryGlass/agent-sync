@@ -106,13 +106,15 @@ class CopilotPermissionHandler(ConfigTypeHandler):
                 pattern = self._extract_bash_pattern(rule)
                 if pattern:
                     terminal_settings[pattern] = False
-                    warnings.append(f"Claude deny rule '{rule}' mapped to VS Code 'false' (require approval). VS Code doesn't support blocking commands entirely.")
+                    warning_msg = f"Claude deny rule '{rule}' mapped to VS Code 'false' (require approval). VS Code doesn't support blocking commands entirely."
+                    warnings.append(warning_msg)
 
             elif rule.startswith('WebFetch('):
                 pattern = self._extract_webfetch_pattern(rule)
                 if pattern:
                     url_settings[pattern] = False
-                    warnings.append(f"Claude deny rule '{rule}' mapped to VS Code 'false' (require approval). VS Code doesn't support blocking URLs entirely.")
+                    warning_msg = f"Claude deny rule '{rule}' mapped to VS Code 'false' (require approval). VS Code doesn't support blocking URLs entirely."
+                    warnings.append(warning_msg)
 
         # Build final settings object
         if terminal_settings:
@@ -120,7 +122,12 @@ class CopilotPermissionHandler(ConfigTypeHandler):
         if url_settings:
             settings['chat.tools.urls.autoApprove'] = url_settings
 
-        # Store warnings in metadata for retrieval
+        # Append warnings to adapter's warnings list for orchestrator to display
+        if warnings and options and options.get('adapter'):
+            adapter = options['adapter']
+            adapter.warnings.extend(warnings)
+
+        # Store warnings in metadata for retrieval (backward compatibility)
         if warnings and options and options.get('store_warnings'):
             canonical_obj.add_metadata('conversion_warnings', warnings)
 

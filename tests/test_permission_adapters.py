@@ -277,6 +277,29 @@ class TestCopilotPermissionAdapter:
         assert data["chat.tools.terminal.autoApprove"]["rm -rf"] == False
         assert data["chat.tools.urls.autoApprove"]["https://malicious.com/*"] == False
 
+    def test_deny_conversion_warnings(self, adapter):
+        """Test that warnings are generated for lossy deny conversions."""
+        perm = CanonicalPermission(
+            allow=[],
+            ask=[],
+            deny=["Bash(rm -rf:*)", "WebFetch(domain:malicious.com)"],
+            source_format="claude"
+        )
+
+        # Clear any existing warnings
+        adapter.clear_conversion_warnings()
+
+        # Convert to VS Code format
+        content = adapter.from_canonical(perm, ConfigType.PERMISSION)
+
+        # Check that warnings were generated
+        warnings = adapter.get_warnings()
+        assert len(warnings) == 2
+        assert any("deny rule" in w.lower() for w in warnings)
+        assert any("Bash(rm -rf:*)" in w for w in warnings)
+        assert any("WebFetch(domain:malicious.com)" in w for w in warnings)
+        assert any("doesn't support blocking" in w for w in warnings)
+
     def test_round_trip_fidelity(self, adapter):
         """Test Copilot -> Claude -> Copilot preserves data."""
         original_fixture = Path("tests/fixtures/copilot/permissions/terminal-simple.json")

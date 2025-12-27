@@ -182,6 +182,38 @@ Tool and URL access control configurations.
 - Claude: `settings.json` (in `~/.claude/`)
 - Copilot: `settings.perm.json` (in `.github/`)
 
+**Lossy Conversions and Strict Mode:**
+
+When syncing permissions from Claude to VS Code (Copilot), some conversions are lossy because VS Code doesn't support all permission categories:
+
+- **Claude `deny` rules** → **VS Code `false` (require approval)**
+  - Claude can block commands entirely with `deny`
+  - VS Code only supports `true` (auto-approve) or `false` (require approval)
+  - Deny rules are downgraded to "require approval" with a warning
+
+**Using --strict flag:**
+```bash
+# Error on lossy conversions for security-critical scenarios
+python -m cli.main \
+  --source-dir ~/.claude \
+  --target-dir .github \
+  --source-format claude \
+  --target-format copilot \
+  --config-type permission \
+  --strict
+```
+
+When `--strict` is enabled:
+- Lossy conversions trigger an error (exit code 1)
+- Warnings are displayed showing which rules were affected
+- Useful for ensuring no security rules are silently downgraded
+- Recommended for production permission sync workflows
+
+Without `--strict`:
+- Lossy conversions generate warnings but sync succeeds
+- Warnings are logged to stderr for visibility
+- Appropriate for development and testing scenarios
+
 ### Slash Commands
 Reusable prompt templates invoked via special syntax. Slash commands allow users to define custom workflows with variable substitution and tool restrictions.
 

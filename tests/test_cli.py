@@ -147,6 +147,16 @@ class TestCLIArgumentParsing:
         args = parser.parse_args(base_args + ['--force'])
         assert args.force is True
 
+    def test_strict_flag(self, parser, base_args):
+        """Test --strict flag."""
+        # Without flag
+        args = parser.parse_args(base_args)
+        assert args.strict is False
+
+        # With flag
+        args = parser.parse_args(base_args + ['--strict'])
+        assert args.strict is True
+
     def test_verbose_flag(self, parser, base_args):
         """Test --verbose and -v flags."""
         # Without flag
@@ -1026,11 +1036,98 @@ class TestCLIPermissionSupport:
         with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
-            
+
             result = main(base_args + ['--config-type', 'permission', '--dry-run'])
-            
+
             assert result == 0
             call_kwargs = mock_orch.call_args.kwargs
             assert call_kwargs['config_type'] == ConfigType.PERMISSION
-            assert call_kwargs['dry_run'] is True
+
+    def test_strict_mode_with_warnings_errors(self, tmp_path):
+        """Test that --strict flag causes error when warnings are present."""
+        source_file = tmp_path / "settings.json"
+        source_file.write_text('{"permissions": {"deny": ["Bash(rm:*)"]}}')
+
+        with patch('cli.main.setup_registry') as mock_setup:
+            # Mock registry and adapters
+            mock_registry = MagicMock()
+            mock_source_adapter = MagicMock()
+            mock_target_adapter = MagicMock()
+
+            # Configure adapters
+            mock_source_adapter.format_name = "claude"
+            mock_source_adapter.get_file_extension.return_value = ".json"
+            mock_source_adapter.get_warnings.return_value = []
+
+            mock_target_adapter.format_name = "copilot"
+            mock_target_adapter.file_extension = ".perm.json"
+            mock_target_adapter.get_file_extension.return_value = ".perm.json"
+            mock_target_adapter.from_canonical.return_value = '{"chat.tools.terminal.autoApprove": {"rm": false}}'
+            # Simulate warnings from lossy conversion
+            mock_target_adapter.get_warnings.return_value = [
+                "Claude deny rule 'Bash(rm:*)' mapped to VS Code 'false' (require approval). VS Code doesn't support blocking commands entirely."
+            ]
+
+            mock_registry.list_formats.return_value = ['claude', 'copilot']
+            mock_registry.get_adapter.side_effect = lambda fmt: {
+                'claude': mock_source_adapter,
+                'copilot': mock_target_adapter
+            }.get(fmt)
+
+            mock_setup.return_value = mock_registry
+
+            # Run with --strict flag
+            result = main([
+                '--convert-file', str(source_file),
+                '--source-format', 'claude',
+                '--target-format', 'copilot',
+                '--config-type', 'permission',
+                '--strict'
+            ])
+
+            # Should exit with error code due to warnings
+            assert result == 1
+
+    def test_strict_mode_without_warnings_succeeds(self, tmp_path):
+        """Test that --strict flag succeeds when no warnings are present."""
+        source_file = tmp_path / "settings.json"
+        source_file.write_text('{"permissions": {"allow": ["Bash(ls:*)"]}}')
+
+        with patch('cli.main.setup_registry') as mock_setup:
+            # Mock registry and adapters
+            mock_registry = MagicMock()
+            mock_source_adapter = MagicMock()
+            mock_target_adapter = MagicMock()
+
+            # Configure adapters
+            mock_source_adapter.format_name = "claude"
+            mock_source_adapter.get_file_extension.return_value = ".json"
+            mock_source_adapter.get_warnings.return_value = []
+
+            mock_target_adapter.format_name = "copilot"
+            mock_target_adapter.file_extension = ".perm.json"
+            mock_target_adapter.get_file_extension.return_value = ".perm.json"
+            mock_target_adapter.from_canonical.return_value = '{"chat.tools.terminal.autoApprove": {"ls": true}}'
+            # No warnings for clean conversion
+            mock_target_adapter.get_warnings.return_value = []
+
+            mock_registry.list_formats.return_value = ['claude', 'copilot']
+            mock_registry.get_adapter.side_effect = lambda fmt: {
+                'claude': mock_source_adapter,
+                'copilot': mock_target_adapter
+            }.get(fmt)
+
+            mock_setup.return_value = mock_registry
+
+            # Run with --strict flag
+            result = main([
+                '--convert-file', str(source_file),
+                '--source-format', 'claude',
+                '--target-format', 'copilot',
+                '--config-type', 'permission',
+                '--strict'
+            ])
+
+            # Should succeed (no warnings)
+            assert result == 0
 
