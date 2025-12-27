@@ -73,7 +73,7 @@ class SyncStateManager:
         
         if self.state_file.exists():
             try:
-                with open(self.state_file, 'r') as f:
+                with open(self.state_file, 'r', encoding='utf-8') as f:
                     state = json.load(f)
                     # Add version if missing (migration strategy)
                     if "version" not in state:
@@ -98,7 +98,7 @@ class SyncStateManager:
             if not directory.exists():
                 directory.mkdir(parents=True, exist_ok=True)
                 
-            with tempfile.NamedTemporaryFile('w', dir=directory, delete=False) as tf:
+            with tempfile.NamedTemporaryFile('w', dir=directory, delete=False, encoding='utf-8') as tf:
                 json.dump(self.state, tf, indent=2)
                 temp_path = Path(tf.name)
             

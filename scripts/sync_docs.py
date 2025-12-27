@@ -143,7 +143,8 @@ def add_frontmatter(content: str, source_url: str, title: str) -> str:
         Markdown with frontmatter
     """
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    frontmatter = f"""---
+    frontmatter = f"""
+---
 title: {title}
 source_url: {source_url}
 fetched_at: {timestamp}
@@ -252,6 +253,12 @@ def sync_doc(
         else:
             logger.info(f"  Updated: {output_path}")
         return True
+    except PermissionError:
+        logger.error(f"Permission denied writing to {output_path}")
+        return False
+    except FileNotFoundError:
+        logger.error(f"Could not find directory for {output_path}")
+        return False
     except OSError as e:
         logger.error(f"Error writing {output_path}: {e}")
         return False
