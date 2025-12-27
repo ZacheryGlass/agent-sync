@@ -294,6 +294,7 @@ See `tests/` directory for test structure.
 - **Path validation**: Ensure files are in expected directories
 - **Content validation**: Verify YAML/JSON structure before parsing
 - **Permission checking**: Respect file permissions
+- **Symlink handling**: Paths are resolved using `.resolve()` which follows symbolic links to their targets. Directory sync operations will process the actual target of a symlinked directory.
 - **No code execution**: Pure data conversion, no eval/exec
 
 ## Future Enhancements
