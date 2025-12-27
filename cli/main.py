@@ -426,6 +426,8 @@ def main(argv: Optional[list] = None):
         if args.source_dir:
             print("Error: --convert-file and --source-dir are mutually exclusive", file=sys.stderr)
             return EXIT_ERROR
+        return convert_single_file(args)
+
     # Route to in-place file sync mode if --sync-file is specified
     if args.sync_file:
         # Validate mutual exclusivity
