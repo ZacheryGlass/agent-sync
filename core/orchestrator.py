@@ -577,7 +577,18 @@ class UniversalSyncOrchestrator:
         Returns:
             Base name without the extension
         """
+        if not file_path.name:
+            return ""
+
         name = file_path.name
-        if extension.startswith('.') and name.endswith(extension):
+
+        # Normalize extension: ensure it starts with a dot if not empty
+        if extension and not extension.startswith('.'):
+            extension = '.' + extension
+
+        if extension and name.endswith(extension):
             return name[:-len(extension)]
+
+        # Fallback to stem for files without extension or non-matching extension
+        # Path.stem handles .hidden files by returning the full name
         return file_path.stem
