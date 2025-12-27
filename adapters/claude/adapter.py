@@ -99,6 +99,9 @@ class ClaudeAdapter(FormatAdapter):
     def get_conversion_warnings(self) -> List[str]:
         return self.warnings
 
+    def clear_conversion_warnings(self):
+        self.warnings = []
+
     def _get_handler(self, config_type: ConfigType):
         """Get handler for config type."""
         if config_type not in self._handlers:

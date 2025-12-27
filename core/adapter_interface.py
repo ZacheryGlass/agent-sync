@@ -201,15 +201,20 @@ class FormatAdapter(ABC):
         """
         Return warnings about data loss or unsupported features.
 
-        Override this to collect warnings during conversion, such as:
-        - Dropped fields (format doesn't support this feature)
-        - Lossy conversions (approximate mappings)
-        - Missing required fields (using defaults)
+        Should return warnings for the most recent operation.
+        Implementations should clear internal warning storage after this is called
+        or provide a clear_conversion_warnings() mechanism.
 
         Returns:
             List of warning messages
         """
         return []
+
+    def clear_conversion_warnings(self):
+        """
+        Clear any stored conversion warnings.
+        """
+        pass
 
     def validate(self, canonical_obj: Any, config_type: ConfigType) -> List[str]:
         """
