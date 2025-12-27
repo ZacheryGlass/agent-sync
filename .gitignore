@@ -33,11 +33,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-!agent-sync.spec
-
 # Unit test / coverage reports
 htmlcov/
 .tox/

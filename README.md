@@ -26,7 +26,7 @@ pip install agent-sync
 
 ### Building from Source
 
-If you prefer to build from source or create a standalone executable:
+If you prefer to build from source:
 
 **Requirements:** Python 3.12+
 
