@@ -72,7 +72,7 @@ def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.Argumen
     Returns:
         Configured ArgumentParser instance
     """
-    formats = registry.list_formats() if registry else ['claude', 'copilot']
+    formats = registry.list_formats() if registry else ['claude', 'copilot', 'gemini']
 
     parser = argparse.ArgumentParser(
         description='Universal sync tool for AI coding agent configurations',

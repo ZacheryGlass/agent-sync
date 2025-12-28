@@ -1131,3 +1131,260 @@ class TestCLIPermissionSupport:
             # Should succeed (no warnings)
             assert result == 0
 
+
+# =============================================================================
+# TestCLIGeminiIntegration - CLI integration tests with Gemini format
+# =============================================================================
+
+class TestCLIGeminiIntegration:
+    """Tests for CLI operations with Gemini format."""
+
+    def test_gemini_format_in_source_format_choices(self, tmp_path):
+        """Test that --source-format accepts 'gemini'."""
+        gemini_dir = tmp_path / "gemini"
+        gemini_dir.mkdir()
+        claude_dir = tmp_path / "claude"
+        claude_dir.mkdir()
+
+        parser = create_parser()
+        args = parser.parse_args([
+            '--source-dir', str(gemini_dir),
+            '--target-dir', str(claude_dir),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command'
+        ])
+        assert args.source_format == 'gemini'
+
+    def test_gemini_format_in_target_format_choices(self, tmp_path):
+        """Test that --target-format accepts 'gemini'."""
+        claude_dir = tmp_path / "claude"
+        claude_dir.mkdir()
+        gemini_dir = tmp_path / "gemini"
+        gemini_dir.mkdir()
+
+        parser = create_parser()
+        args = parser.parse_args([
+            '--source-dir', str(claude_dir),
+            '--target-dir', str(gemini_dir),
+            '--source-format', 'claude',
+            '--target-format', 'gemini',
+            '--config-type', 'slash-command'
+        ])
+        assert args.target_format == 'gemini'
+
+    def test_gemini_directory_sync_slash_commands(self, tmp_path):
+        """Test directory sync with Gemini format (slash commands)."""
+        gemini_dir = tmp_path / "gemini"
+        gemini_dir.mkdir()
+        claude_dir = tmp_path / "claude"
+        claude_dir.mkdir()
+
+        # Create Gemini command file
+        gemini_file = gemini_dir / "test.toml"
+        gemini_file.write_text('''description = "Test command"
+
+prompt = """
+Test instructions.
+"""
+''')
+
+        # Run sync
+        result = main([
+            '--source-dir', str(gemini_dir),
+            '--target-dir', str(claude_dir),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command'
+        ])
+
+        # Verify success
+        assert result == 0
+        assert (claude_dir / "test.md").exists()
+
+    def test_gemini_single_file_conversion(self, tmp_path):
+        """Test single file conversion with Gemini format."""
+        gemini_file = tmp_path / "command.toml"
+        gemini_file.write_text('''description = "Single file test"
+
+prompt = """
+Single file conversion test.
+"""
+''')
+
+        output_file = tmp_path / "command.md"
+
+        # Run conversion
+        result = main([
+            '--convert-file', str(gemini_file),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command',
+            '--output', str(output_file)
+        ])
+
+        # Verify success
+        assert result == 0
+        assert output_file.exists()
+        content = output_file.read_text()
+        assert "Single file test" in content
+
+    def test_gemini_auto_detect_format(self, tmp_path):
+        """Test that Gemini format is auto-detected from .toml extension."""
+        gemini_file = tmp_path / "command.toml"
+        gemini_file.write_text('''description = "Auto-detect test"
+
+prompt = """
+Auto-detection test.
+"""
+''')
+
+        # Run conversion without --source-format (should auto-detect)
+        result = main([
+            '--convert-file', str(gemini_file),
+            '--target-format', 'claude',
+            '--config-type', 'slash-command'
+        ])
+
+        # Should succeed with auto-detection
+        assert result == 0
+
+    def test_gemini_dry_run_mode(self, tmp_path):
+        """Test dry-run mode with Gemini format."""
+        gemini_dir = tmp_path / "gemini"
+        gemini_dir.mkdir()
+        claude_dir = tmp_path / "claude"
+        claude_dir.mkdir()
+
+        # Create Gemini command file
+        gemini_file = gemini_dir / "dry-run.toml"
+        gemini_file.write_text('''description = "Dry-run test"
+
+prompt = """
+Dry-run test.
+"""
+''')
+
+        # Run with --dry-run
+        result = main([
+            '--source-dir', str(gemini_dir),
+            '--target-dir', str(claude_dir),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command',
+            '--dry-run'
+        ])
+
+        # Should succeed
+        assert result == 0
+        # Should not create actual files
+        assert not (claude_dir / "dry-run.md").exists()
+
+    def test_gemini_bidirectional_sync(self, tmp_path):
+        """Test bidirectional sync with Gemini format."""
+        gemini_dir = tmp_path / "gemini"
+        gemini_dir.mkdir()
+        claude_dir = tmp_path / "claude"
+        claude_dir.mkdir()
+
+        # Create files in both directories
+        gemini_file = gemini_dir / "gemini-cmd.toml"
+        gemini_file.write_text('''description = "Gemini command"
+
+prompt = """
+Gemini command.
+"""
+''')
+
+        claude_file = claude_dir / "claude-cmd.md"
+        claude_file.write_text("""---
+name: claude-cmd
+description: Claude command
+---
+Claude command.
+""")
+
+        # Run bidirectional sync
+        result = main([
+            '--source-dir', str(gemini_dir),
+            '--target-dir', str(claude_dir),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command',
+            '--bidirectional'
+        ])
+
+        # Should succeed
+        assert result == 0
+        # Both files should be synced
+        assert (claude_dir / "gemini-cmd.md").exists()
+        assert (gemini_dir / "claude-cmd.toml").exists()
+
+    def test_gemini_invalid_toml_syntax_error(self, tmp_path):
+        """Test error handling for invalid TOML syntax."""
+        gemini_file = tmp_path / "invalid.toml"
+        gemini_file.write_text('''description = "Invalid TOML
+# Missing closing quote''')
+
+        # Run conversion - should fail
+        result = main([
+            '--convert-file', str(gemini_file),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command'
+        ])
+
+        # Should fail with non-zero exit code
+        assert result != 0
+
+    def test_gemini_missing_prompt_field_error(self, tmp_path):
+        """Test error handling for missing required 'prompt' field."""
+        gemini_file = tmp_path / "missing-prompt.toml"
+        gemini_file.write_text('''description = "No prompt field"
+''')
+
+        # Run conversion - should fail
+        result = main([
+            '--convert-file', str(gemini_file),
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'slash-command'
+        ])
+
+        # Should fail with non-zero exit code
+        assert result != 0
+
+    def test_gemini_to_copilot_sync(self, tmp_path):
+        """Test Gemini to Copilot sync via CLI."""
+        gemini_dir = tmp_path / "gemini"
+        gemini_dir.mkdir()
+        copilot_dir = tmp_path / "copilot"
+        copilot_dir.mkdir()
+
+        # Create Gemini command file
+        gemini_file = gemini_dir / "commit.toml"
+        gemini_file.write_text('''description = "Create commit"
+
+prompt = """
+Create a git commit.
+
+!{git status}
+
+{{args}}
+"""
+''')
+
+        # Run sync
+        result = main([
+            '--source-dir', str(gemini_dir),
+            '--target-dir', str(copilot_dir),
+            '--source-format', 'gemini',
+            '--target-format', 'copilot',
+            '--config-type', 'slash-command'
+        ])
+
+        # Verify success
+        assert result == 0
+        assert (copilot_dir / "commit.prompt.md").exists()
+        content = (copilot_dir / "commit.prompt.md").read_text()
+        assert "Create commit" in content

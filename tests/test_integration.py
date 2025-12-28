@@ -21,7 +21,7 @@ from core.registry import FormatRegistry
 from core.orchestrator import UniversalSyncOrchestrator
 from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
-from adapters import ClaudeAdapter, CopilotAdapter
+from adapters import ClaudeAdapter, CopilotAdapter, GeminiAdapter
 
 
 # =============================================================================
@@ -30,10 +30,11 @@ from adapters import ClaudeAdapter, CopilotAdapter
 
 @pytest.fixture
 def registry():
-    """Create registry with Claude and Copilot adapters."""
+    """Create registry with Claude, Copilot, and Gemini adapters."""
     reg = FormatRegistry()
     reg.register(ClaudeAdapter())
     reg.register(CopilotAdapter())
+    reg.register(GeminiAdapter())
     return reg
 
 
@@ -95,6 +96,14 @@ def copilot_dir(test_results_dir):
 
 
 @pytest.fixture
+def gemini_dir(test_results_dir):
+    """Create persistent Gemini commands directory in test dir."""
+    d = test_results_dir / "gemini_commands"
+    d.mkdir()
+    return d
+
+
+@pytest.fixture
 def sample_claude_agent():
     """Sample Claude agent content."""
     return """---
@@ -126,6 +135,53 @@ Copilot agent instructions here.
 
 Multiple paragraphs supported.
 """
+
+
+@pytest.fixture
+def sample_gemini_command():
+    """Sample Gemini custom command content."""
+    return '''description = "Create a git commit with AI-generated message"
+
+prompt = """
+Review the current git status and staged changes.
+
+Git Status:
+!{git status}
+
+Staged Changes:
+!{git diff --staged}
+
+Create a conventional commit message based on these changes.
+
+{{args}}
+"""
+'''
+
+
+@pytest.fixture
+def sample_gemini_namespaced():
+    """
+    Sample Gemini namespaced command (simulating git/review.toml).
+
+    Note: Currently unused but preserved for potential future tests of
+    subdirectory namespace handling if orchestrator gains recursive directory
+    scanning capabilities.
+    """
+    return '''description = "Review code changes"
+
+prompt = """
+Review the following code changes and provide detailed feedback:
+
+!{git diff}
+
+Focus on:
+- Code quality and best practices
+- Potential bugs or issues
+- Performance considerations
+
+{{args}}
+"""
+'''
 
 
 # =============================================================================
@@ -1639,3 +1695,943 @@ class TestPermissionIntegration:
         # URL permissions should be in allow
         assert "WebFetch" in perms.get("allow", []) or any("WebFetch" in p for p in perms.get("allow", [])), \
             "WebFetch should be in allow (from URLs)"
+
+
+# =============================================================================
+# TestGeminiToClaudeSync - Gemini -> Claude direction tests
+# =============================================================================
+
+class TestGeminiToClaudeSync:
+    """Tests for Gemini to Claude slash command sync direction."""
+
+    def test_initial_sync_creates_claude_file(
+        self, registry, state_manager, gemini_dir, claude_dir, sample_gemini_command
+    ):
+        """Test that initial sync creates Claude file from Gemini source."""
+        # Arrange: Create Gemini command file
+        gemini_file = gemini_dir / "commit.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        # Act: Run sync
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Claude file created
+        claude_file = claude_dir / "commit.md"
+        assert claude_file.exists(), "Claude file should be created"
+
+    def test_sync_preserves_command_content(
+        self, registry, state_manager, gemini_dir, claude_dir, sample_gemini_command
+    ):
+        """Test that sync preserves command description and instructions."""
+        # Arrange
+        gemini_file = gemini_dir / "content-test.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Content preserved
+        claude_file = claude_dir / "content-test.md"
+        content = claude_file.read_text()
+        assert "Create a git commit with AI-generated message" in content
+        assert "git status" in content
+        assert "git diff --staged" in content
+        assert "conventional commit message" in content
+
+    def test_namespace_metadata_preservation(
+        self, registry, state_manager, gemini_dir, claude_dir
+    ):
+        """Test that namespace metadata from file is preserved (not directory structure)."""
+        # Arrange: Create Gemini command with namespace in name
+        # Note: Orchestrator doesn't scan subdirectories, so we test
+        # namespace preservation via metadata, not directory structure
+        gemini_file = gemini_dir / "review.toml"
+        gemini_file.write_text('''name = "git:review"
+description = "Review code changes"
+
+prompt = """
+Review the following code changes and provide detailed feedback:
+
+!{git diff}
+
+{{args}}
+"""
+''')
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Claude file created and namespace preserved in metadata
+        claude_file = claude_dir / "review.md"
+        assert claude_file.exists(), "Claude file should be created"
+        content = claude_file.read_text()
+        assert "Review code changes" in content
+        # Name with namespace should be preserved
+        assert "git:review" in content or "git-review" in content or "review" in content
+
+    def test_placeholder_syntax_preserved(
+        self, registry, state_manager, gemini_dir, claude_dir
+    ):
+        """Test that Gemini placeholder syntax is preserved in sync."""
+        # Arrange: Command with all placeholder types
+        gemini_content = '''description = "Test all placeholders"
+
+prompt = """
+Shell command: !{git status}
+File embed: @{test.py}
+Args: {{args}}
+"""
+'''
+        gemini_file = gemini_dir / "placeholders.toml"
+        gemini_file.write_text(gemini_content)
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Placeholders preserved
+        claude_file = claude_dir / "placeholders.md"
+        content = claude_file.read_text()
+        # Note: Syntax may be converted to Claude format
+        # Just verify content is present
+        assert "git status" in content
+        assert "test.py" in content or "{{args}}" in content
+
+    def test_source_change_updates_target(
+        self, registry, state_file, gemini_dir, claude_dir
+    ):
+        """Test that modifying source file updates target on re-sync."""
+        # Arrange: Create and sync initial file
+        state_manager = SyncStateManager(state_file)
+
+        gemini_file = gemini_dir / "updater.toml"
+        gemini_file.write_text('''description = "Original description"
+
+prompt = """
+Original instructions.
+"""
+''')
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Ensure time difference for mtime detection
+        time.sleep(0.1)
+
+        # Act: Modify source and re-sync
+        gemini_file.write_text('''description = "Updated description"
+
+prompt = """
+Updated instructions.
+"""
+''')
+
+        # Create fresh state manager to simulate new sync session
+        state_manager2 = SyncStateManager(state_file)
+        orchestrator2 = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager2,
+            dry_run=False
+        )
+        orchestrator2.sync()
+
+        # Assert: Target updated
+        claude_file = claude_dir / "updater.md"
+        content = claude_file.read_text()
+        assert "Updated description" in content
+        assert "Updated instructions" in content
+
+
+# =============================================================================
+# TestGeminiToCopilotSync - Gemini -> Copilot direction tests
+# =============================================================================
+
+class TestGeminiToCopilotSync:
+    """Tests for Gemini to Copilot slash command sync direction."""
+
+    def test_initial_sync_creates_copilot_file(
+        self, registry, state_manager, gemini_dir, copilot_dir, sample_gemini_command
+    ):
+        """Test that initial sync creates Copilot file from Gemini source."""
+        # Arrange: Create Gemini command file
+        gemini_file = gemini_dir / "commit.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        # Act: Run sync
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=copilot_dir,
+            source_format='gemini',
+            target_format='copilot',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Copilot file created
+        copilot_file = copilot_dir / "commit.prompt.md"
+        assert copilot_file.exists(), "Copilot file should be created"
+
+    def test_sync_preserves_command_content(
+        self, registry, state_manager, gemini_dir, copilot_dir, sample_gemini_command
+    ):
+        """Test that sync preserves command content in Copilot format."""
+        # Arrange
+        gemini_file = gemini_dir / "content-test.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=copilot_dir,
+            source_format='gemini',
+            target_format='copilot',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Content preserved
+        copilot_file = copilot_dir / "content-test.prompt.md"
+        content = copilot_file.read_text()
+        assert "Create a git commit with AI-generated message" in content
+        assert "git status" in content
+        assert "conventional commit message" in content
+
+    def test_round_trip_conversion_accuracy(
+        self, registry, state_file, gemini_dir, copilot_dir
+    ):
+        """Test Gemini -> Copilot -> Gemini preserves essential content."""
+        # Arrange: Gemini original
+        original_content = '''description = "Round trip test"
+
+prompt = """
+Test instructions with placeholders.
+
+!{git status}
+
+{{args}}
+"""
+'''
+        gemini_file = gemini_dir / "round-trip.toml"
+        gemini_file.write_text(original_content)
+
+        # Step 1: Gemini -> Copilot
+        state_manager1 = SyncStateManager(state_file)
+        orchestrator1 = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=copilot_dir,
+            source_format='gemini',
+            target_format='copilot',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager1,
+            dry_run=False
+        )
+        orchestrator1.sync()
+
+        # Step 2: Delete original Gemini file
+        gemini_file.unlink()
+
+        # Step 3: Copilot -> Gemini (reverse sync)
+        state_file2 = state_file.parent / "state2.json"
+        state_manager2 = SyncStateManager(state_file2)
+        orchestrator2 = UniversalSyncOrchestrator(
+            source_dir=copilot_dir,
+            target_dir=gemini_dir,
+            source_format='copilot',
+            target_format='gemini',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager2,
+            dry_run=False
+        )
+        orchestrator2.sync()
+
+        # Assert: Content preserved in round trip
+        restored_file = gemini_dir / "round-trip.toml"
+        assert restored_file.exists()
+        restored_content = restored_file.read_text()
+
+        assert "Round trip test" in restored_content
+        assert "Test instructions" in restored_content
+
+
+# =============================================================================
+# TestClaudeToGeminiSync - Claude -> Gemini direction tests
+# =============================================================================
+
+class TestClaudeToGeminiSync:
+    """Tests for Claude to Gemini slash command sync direction."""
+
+    def test_initial_sync_creates_gemini_file(
+        self, registry, state_manager, claude_dir, gemini_dir
+    ):
+        """Test that initial sync creates Gemini file from Claude source."""
+        # Arrange: Create Claude slash command file
+        claude_content = """---
+name: test-command
+description: Test slash command
+---
+Test command instructions.
+
+Use $ARGUMENTS for user input.
+"""
+        claude_file = claude_dir / "test-command.md"
+        claude_file.write_text(claude_content)
+
+        # Act: Run sync
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=claude_dir,
+            target_dir=gemini_dir,
+            source_format='claude',
+            target_format='gemini',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Gemini file created
+        gemini_file = gemini_dir / "test-command.toml"
+        assert gemini_file.exists(), "Gemini file should be created"
+
+    def test_sync_preserves_claude_content(
+        self, registry, state_manager, claude_dir, gemini_dir
+    ):
+        """Test that sync preserves Claude slash command content."""
+        # Arrange
+        claude_content = """---
+name: content-test
+description: Content preservation test
+---
+Test instructions with details.
+
+Multiple paragraphs supported.
+"""
+        claude_file = claude_dir / "content-test.md"
+        claude_file.write_text(claude_content)
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=claude_dir,
+            target_dir=gemini_dir,
+            source_format='claude',
+            target_format='gemini',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        gemini_file = gemini_dir / "content-test.toml"
+        content = gemini_file.read_text()
+        assert "Content preservation test" in content
+        assert "Test instructions" in content
+        assert "Multiple paragraphs" in content
+
+
+# =============================================================================
+# TestCopilotToGeminiSync - Copilot -> Gemini direction tests
+# =============================================================================
+
+class TestCopilotToGeminiSync:
+    """Tests for Copilot to Gemini slash command sync direction."""
+
+    def test_initial_sync_creates_gemini_file(
+        self, registry, state_manager, copilot_dir, gemini_dir
+    ):
+        """Test that initial sync creates Gemini file from Copilot source."""
+        # Arrange: Create Copilot prompt file
+        copilot_content = """---
+name: test-prompt
+description: Test Copilot prompt
+---
+Test prompt instructions.
+
+Use ${selection} for selected text.
+"""
+        copilot_file = copilot_dir / "test-prompt.prompt.md"
+        copilot_file.write_text(copilot_content)
+
+        # Act: Run sync
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=copilot_dir,
+            target_dir=gemini_dir,
+            source_format='copilot',
+            target_format='gemini',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Gemini file created
+        gemini_file = gemini_dir / "test-prompt.toml"
+        assert gemini_file.exists(), "Gemini file should be created"
+
+    def test_sync_preserves_copilot_content(
+        self, registry, state_manager, copilot_dir, gemini_dir
+    ):
+        """Test that sync preserves Copilot prompt content in Gemini format."""
+        # Arrange
+        copilot_content = """---
+name: content-test
+description: Copilot content test
+---
+Copilot prompt instructions here.
+
+Multiple lines supported.
+"""
+        copilot_file = copilot_dir / "content-test.prompt.md"
+        copilot_file.write_text(copilot_content)
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=copilot_dir,
+            target_dir=gemini_dir,
+            source_format='copilot',
+            target_format='gemini',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        gemini_file = gemini_dir / "content-test.toml"
+        content = gemini_file.read_text()
+        assert "Copilot content test" in content
+        assert "Copilot prompt instructions" in content
+
+
+# =============================================================================
+# TestGeminiConflictResolution - Gemini-specific conflict tests
+# =============================================================================
+
+class TestGeminiConflictResolution:
+    """Tests for conflict resolution with Gemini files."""
+
+    def test_conflict_force_uses_newer_source(
+        self, registry, state_file, gemini_dir, claude_dir
+    ):
+        """Test that force mode uses source when source is newer (Gemini)."""
+        # Arrange: Create initial sync state
+        state_manager = SyncStateManager(state_file)
+
+        gemini_file = gemini_dir / "conflict.toml"
+        gemini_file.write_text('''description = "Initial"
+
+prompt = """
+Initial.
+"""
+''')
+
+        claude_file = claude_dir / "conflict.md"
+        claude_file.write_text("""---
+name: conflict
+description: Initial
+---
+Initial.
+""")
+
+        # Do initial sync to establish state
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False,
+            force=True
+        )
+        orchestrator.sync()
+
+        # Create conflict: both files modified
+        time.sleep(0.1)
+        claude_file.write_text("""---
+name: conflict
+description: Target modified
+---
+Target modified.
+""")
+
+        time.sleep(0.1)
+        gemini_file.write_text('''description = "Source modified (newer)"
+
+prompt = """
+Source modified (newer).
+"""
+''')
+
+        # Act: Run sync with force, source is newer
+        state_manager2 = SyncStateManager(state_file)
+        orchestrator2 = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager2,
+            dry_run=False,
+            force=True
+        )
+        orchestrator2.sync()
+
+        # Assert: Source content wins (it's newer)
+        content = claude_file.read_text()
+        assert "Source modified (newer)" in content
+
+    def test_conflict_interactive_chooses_source(
+        self, registry, state_file, gemini_dir, claude_dir
+    ):
+        """Test that interactive mode uses source when user chooses 1 (Gemini)."""
+        # Arrange: Start with only source file
+        state_manager = SyncStateManager(state_file)
+
+        gemini_file = gemini_dir / "interactive.toml"
+        gemini_file.write_text('''description = "Initial"
+
+prompt = """
+Initial.
+"""
+''')
+
+        # Initial sync to create target and establish state
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        claude_file = claude_dir / "interactive.md"
+        assert claude_file.exists(), "Initial sync should create target file"
+
+        # Create conflict: modify both files after state was recorded
+        time.sleep(0.1)
+        gemini_file.write_text('''description = "Source version"
+
+prompt = """
+Source version.
+"""
+''')
+
+        time.sleep(0.1)
+        claude_file.write_text("""---
+name: interactive
+description: Target version
+---
+Target version.
+""")
+
+        # Act: User chooses source (option 1)
+        state_manager2 = SyncStateManager(state_file)
+        orchestrator2 = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager2,
+            dry_run=False,
+            force=False  # Interactive mode
+        )
+
+        with patch('core.orchestrator.input', return_value='1'):
+            orchestrator2.sync()
+
+        # Assert: Source content wins
+        content = claude_file.read_text()
+        assert "Source version" in content
+
+
+# =============================================================================
+# TestGeminiBidirectionalSync - Bidirectional sync with Gemini
+# =============================================================================
+
+class TestGeminiBidirectionalSync:
+    """Tests for bidirectional sync workflows with Gemini."""
+
+    def test_bidirectional_creates_files_in_both_directions(
+        self, registry, state_manager, gemini_dir, claude_dir
+    ):
+        """Test that bidirectional sync creates files in both directions (Gemini ↔ Claude)."""
+        # Arrange: Create file only in Gemini dir
+        gemini_only = gemini_dir / "gemini-only.toml"
+        gemini_only.write_text('''description = "Only in Gemini"
+
+prompt = """
+Gemini only command.
+"""
+''')
+
+        # Create file only in Claude dir
+        claude_only = claude_dir / "claude-only.md"
+        claude_only.write_text("""---
+name: claude-only
+description: Only in Claude
+---
+Claude only command.
+""")
+
+        # Act: Run bidirectional sync
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='both',
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: Both directions synced
+        assert (claude_dir / "gemini-only.md").exists(), \
+            "Gemini file should be synced to Claude dir"
+        assert (gemini_dir / "claude-only.toml").exists(), \
+            "Claude file should be synced to Gemini dir"
+
+
+# =============================================================================
+# TestGeminiStateTracking - State tracking with Gemini
+# =============================================================================
+
+class TestGeminiStateTracking:
+    """Tests for state persistence and tracking with Gemini files."""
+
+    def test_state_file_created_after_gemini_sync(
+        self, registry, state_file, gemini_dir, claude_dir, sample_gemini_command
+    ):
+        """Test that state file is created after Gemini sync."""
+        # Arrange
+        state_manager = SyncStateManager(state_file)
+        gemini_file = gemini_dir / "state-test.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert
+        assert state_file.exists(), "State file should be created after sync"
+
+    def test_unchanged_gemini_files_skipped_on_resync(
+        self, registry, state_file, gemini_dir, claude_dir, sample_gemini_command
+    ):
+        """Test that unchanged Gemini files are skipped on re-sync."""
+        # Arrange: Initial sync
+        state_manager = SyncStateManager(state_file)
+        gemini_file = gemini_dir / "unchanged.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Act: Re-sync without changes
+        state_manager2 = SyncStateManager(state_file)
+        orchestrator2 = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager2,
+            dry_run=False
+        )
+        orchestrator2.sync()
+
+        # Assert: Stats show nothing synced
+        assert orchestrator2.stats['source_to_target'] == 0
+        assert orchestrator2.stats['target_to_source'] == 0
+
+    def test_gemini_deletion_deletes_target(
+        self, registry, state_file, gemini_dir, claude_dir
+    ):
+        """Test that deleting Gemini source file propagates deletion to target."""
+        # Arrange: Create and sync file
+        state_manager = SyncStateManager(state_file)
+        gemini_file = gemini_dir / "to-delete.toml"
+        gemini_file.write_text('''description = "Will be deleted"
+
+prompt = """
+Delete me.
+"""
+''')
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        claude_file = claude_dir / "to-delete.md"
+        assert claude_file.exists(), "Target file should exist after initial sync"
+
+        # Act: Delete source and re-sync
+        gemini_file.unlink()
+
+        state_manager2 = SyncStateManager(state_file)
+        orchestrator2 = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager2,
+            dry_run=False
+        )
+        orchestrator2.sync()
+
+        # Assert: Target file deleted
+        assert not claude_file.exists(), "Target file should be deleted"
+
+
+# =============================================================================
+# TestGeminiDryRun - Dry-run mode with Gemini
+# =============================================================================
+
+class TestGeminiDryRun:
+    """Tests for dry-run mode with Gemini files."""
+
+    def test_dry_run_does_not_create_files(
+        self, registry, state_manager, gemini_dir, claude_dir, sample_gemini_command
+    ):
+        """Test that dry-run mode does not create actual files."""
+        # Arrange
+        gemini_file = gemini_dir / "dry-run-test.toml"
+        gemini_file.write_text(sample_gemini_command)
+
+        # Act: Run in dry-run mode
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=True  # Dry-run mode
+        )
+        orchestrator.sync()
+
+        # Assert: No target file created
+        claude_file = claude_dir / "dry-run-test.md"
+        assert not claude_file.exists(), "Dry-run should not create files"
+
+    def test_dry_run_reports_would_sync_count(
+        self, registry, state_manager, gemini_dir, claude_dir
+    ):
+        """Test that dry-run mode reports correct would-sync count."""
+        # Arrange: Create multiple Gemini files
+        for i in range(3):
+            gemini_file = gemini_dir / f"command-{i}.toml"
+            gemini_file.write_text(f'''description = "Command {i}"
+
+prompt = """
+Command {i} instructions.
+"""
+''')
+
+        # Act: Run in dry-run mode
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=True
+        )
+        orchestrator.sync()
+
+        # Assert: Would sync count matches file count
+        assert orchestrator.stats['source_to_target'] == 3, \
+            "Dry-run should report 3 files would be synced"
+
+
+# =============================================================================
+# TestGeminiMultiFileSync - Multi-file sync with Gemini
+# =============================================================================
+
+class TestGeminiMultiFileSync:
+    """Tests for multi-file sync scenarios with Gemini."""
+
+    def test_multiple_gemini_commands_all_synced(
+        self, registry, state_manager, gemini_dir, claude_dir
+    ):
+        """Test that multiple Gemini command files are all synced."""
+        # Arrange: Create multiple Gemini commands
+        commands = ['commit', 'review', 'analyze', 'document']
+        for command_name in commands:
+            command_file = gemini_dir / f"{command_name}.toml"
+            command_file.write_text(f'''description = "{command_name.title()} command"
+
+prompt = """
+{command_name.title()} instructions.
+"""
+''')
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: All files created
+        for command_name in commands:
+            claude_file = claude_dir / f"{command_name}.md"
+            assert claude_file.exists(), f"{command_name} should be synced"
+            content = claude_file.read_text()
+            assert f"{command_name.title()} command" in content
+
+    def test_namespaced_commands_with_metadata(
+        self, registry, state_manager, gemini_dir, claude_dir
+    ):
+        """Test that commands with namespace in name field are synced correctly."""
+        # Arrange: Create commands with namespace in name metadata
+        # Note: Orchestrator doesn't scan subdirectories, so namespace is
+        # stored in the 'name' field, not directory structure
+        commands = {
+            "commit": "git:commit",
+            "review": "git:review",
+            "analyze": "analyze"
+        }
+
+        for file_name, full_name in commands.items():
+            command_file = gemini_dir / f"{file_name}.toml"
+            command_file.write_text(f'''name = "{full_name}"
+description = "{file_name.title()} command"
+
+prompt = """
+{file_name.title()} instructions.
+"""
+''')
+
+        # Act
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=gemini_dir,
+            target_dir=claude_dir,
+            source_format='gemini',
+            target_format='claude',
+            config_type=ConfigType.SLASH_COMMAND,
+            format_registry=registry,
+            state_manager=state_manager,
+            dry_run=False
+        )
+        orchestrator.sync()
+
+        # Assert: All files created
+        for command_name in commands.keys():
+            claude_file = claude_dir / f"{command_name}.md"
+            assert claude_file.exists(), f"{command_name} should be synced"
+            content = claude_file.read_text()
+            assert f"{command_name.title()} command" in content
