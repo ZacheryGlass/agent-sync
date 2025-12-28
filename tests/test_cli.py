@@ -294,7 +294,7 @@ class TestErrorHandling:
     def test_orchestrator_error_propagated(self, valid_dirs):
         """Orchestrator errors result in non-zero exit."""
         source, target = valid_dirs
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_instance.sync.side_effect = ValueError("Test error")
             mock_orch.return_value = mock_instance
@@ -377,7 +377,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_source_dir(self, base_args, valid_source_dir):
         """Orchestrator constructed with correct source_dir."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -391,7 +391,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_target_dir(self, base_args, valid_target_dir):
         """Orchestrator constructed with correct target_dir."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -401,7 +401,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_source_format(self, base_args):
         """Orchestrator constructed with correct source_format."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -411,7 +411,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_target_format(self, base_args):
         """Orchestrator constructed with correct target_format."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -421,7 +421,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_config_type(self, base_args):
         """Orchestrator constructed with correct ConfigType enum."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -432,7 +432,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_direction(self, base_args):
         """Orchestrator constructed with correct direction."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -442,7 +442,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_dry_run(self, base_args):
         """Orchestrator constructed with dry_run flag."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -452,7 +452,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_force(self, base_args):
         """Orchestrator constructed with force flag."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -462,7 +462,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_receives_verbose(self, base_args):
         """Orchestrator constructed with verbose flag."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -472,7 +472,7 @@ class TestSyncInvocation:
 
     def test_orchestrator_sync_called(self, base_args):
         """Orchestrator.sync() method is called."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -607,7 +607,7 @@ Instructions.
 
     def test_dry_run_passed_to_orchestrator(self, base_args):
         """--dry-run flag passed to orchestrator."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -666,7 +666,7 @@ class TestVerboseMode:
 
     def test_verbose_passed_to_orchestrator(self, base_args):
         """--verbose flag passed to orchestrator."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -750,7 +750,7 @@ class TestConversionOptions:
 
     def test_conversion_options_dict_passed(self, base_args):
         """conversion_options dict passed to orchestrator."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -765,7 +765,7 @@ class TestConversionOptions:
 
     def test_conversion_options_empty_when_not_set(self, base_args):
         """No conversion_options when flags not used."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -999,7 +999,7 @@ class TestCLIPermissionSupport:
 
     def test_config_type_permission_argument(self, base_args):
         """Test --config-type permission is accepted."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -1015,7 +1015,7 @@ class TestCLIPermissionSupport:
         source_file = tmp_path / "settings.json"
         source_file.write_text("{}")
         
-        with patch('cli.main.setup_registry') as mock_setup:
+        with patch.object(sys.modules['cli.main'], 'setup_registry') as mock_setup:
             # Mock registry and adapters
             mock_registry = MagicMock()
             mock_source_adapter = MagicMock()
@@ -1055,7 +1055,7 @@ class TestCLIPermissionSupport:
 
     def test_unsupported_format_error(self, base_args):
         """Test error when format doesn't support permissions."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             # Simulate orchestrator raising ValueError for unsupported config type
             mock_orch.side_effect = ValueError("Format 'copilot' does not support permission")
             
@@ -1065,7 +1065,7 @@ class TestCLIPermissionSupport:
 
     def test_permission_sync_dry_run(self, base_args):
         """Test permission sync with dry-run."""
-        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+        with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
@@ -1080,7 +1080,7 @@ class TestCLIPermissionSupport:
         source_file = tmp_path / "settings.json"
         source_file.write_text('{"permissions": {"deny": ["Bash(rm:*)"]}}')
 
-        with patch('cli.main.setup_registry') as mock_setup:
+        with patch.object(sys.modules['cli.main'], 'setup_registry') as mock_setup:
             # Mock registry and adapters
             mock_registry = MagicMock()
             mock_source_adapter = MagicMock()
@@ -1125,7 +1125,7 @@ class TestCLIPermissionSupport:
         source_file = tmp_path / "settings.json"
         source_file.write_text('{"permissions": {"allow": ["Bash(ls:*)"]}}')
 
-        with patch('cli.main.setup_registry') as mock_setup:
+        with patch.object(sys.modules['cli.main'], 'setup_registry') as mock_setup:
             # Mock registry and adapters
             mock_registry = MagicMock()
             mock_source_adapter = MagicMock()
