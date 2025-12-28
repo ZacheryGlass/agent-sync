@@ -132,9 +132,23 @@ class UniversalSyncOrchestrator:
 
         # Validate config type support
         if config_type not in self.source_adapter.supported_config_types:
-            raise ValueError(f"Format '{source_format}' does not support {config_type.value}")
+            supported = ', '.join([ct.value for ct in self.source_adapter.supported_config_types])
+            raise ValueError(
+                f"Gemini format does not support config type '{config_type.value}'.\n"
+                f"Supported config types for Gemini: {supported}"
+            ) if source_format == 'gemini' else ValueError(
+                f"Format '{source_format}' does not support config type '{config_type.value}'.\n"
+                f"Supported config types: {supported}"
+            )
         if config_type not in self.target_adapter.supported_config_types:
-            raise ValueError(f"Format '{target_format}' does not support {config_type.value}")
+            supported = ', '.join([ct.value for ct in self.target_adapter.supported_config_types])
+            raise ValueError(
+                f"Gemini format does not support config type '{config_type.value}'.\n"
+                f"Supported config types for Gemini: {supported}"
+            ) if target_format == 'gemini' else ValueError(
+                f"Format '{target_format}' does not support config type '{config_type.value}'.\n"
+                f"Supported config types: {supported}"
+            )
 
         # Statistics
         self.stats = {

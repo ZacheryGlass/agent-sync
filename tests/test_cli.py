@@ -82,9 +82,9 @@ class TestCLIArgumentParsing:
         assert args.target_dir == valid_target_dir
 
     def test_source_format_choices(self, parser, base_args):
-        """Test --source-format accepts only 'claude', 'copilot'."""
+        """Test --source-format accepts 'claude', 'copilot', 'gemini'."""
         # Valid choices should work
-        for fmt in ['claude', 'copilot']:
+        for fmt in ['claude', 'copilot', 'gemini']:
             args = parser.parse_args([
                 '--source-dir', base_args[1],
                 '--target-dir', base_args[3],
@@ -94,9 +94,9 @@ class TestCLIArgumentParsing:
             assert args.source_format == fmt
 
     def test_target_format_choices(self, parser, base_args):
-        """Test --target-format accepts only 'claude', 'copilot'."""
+        """Test --target-format accepts 'claude', 'copilot', 'gemini'."""
         # Valid choices should work
-        for fmt in ['claude', 'copilot']:
+        for fmt in ['claude', 'copilot', 'gemini']:
             args = parser.parse_args([
                 '--source-dir', base_args[1],
                 '--target-dir', base_args[3],
@@ -314,6 +314,35 @@ class TestErrorHandling:
             parser.parse_args(['--invalid-arg'])
         captured = capsys.readouterr()
         assert 'error' in captured.err.lower() or 'unrecognized' in captured.err.lower()
+
+    def test_gemini_unsupported_config_type(self, valid_dirs, capsys):
+        """Gemini format should error gracefully for unsupported config types."""
+        source, target = valid_dirs
+        
+        # Test with agent config type (not supported by Gemini)
+        result = main([
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--source-format', 'gemini',
+            '--target-format', 'copilot',
+            '--config-type', 'agent'
+        ])
+        
+        assert result != 0
+        captured = capsys.readouterr()
+        # Check that error message mentions unsupported config type
+        assert 'does not support' in captured.err.lower()
+        
+        # Test with permission config type (not supported by Gemini)
+        result = main([
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--source-format', 'copilot',
+            '--target-format', 'gemini',
+            '--config-type', 'permission'
+        ])
+        
+        assert result != 0
 
 
 class TestSyncInvocation:

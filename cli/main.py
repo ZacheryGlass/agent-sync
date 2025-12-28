@@ -89,6 +89,16 @@ Examples:
            --source-format claude --target-format copilot \
            --config-type permission
 
+  # Sync Gemini custom commands to Copilot
+  %(prog)s --source-dir ~/.gemini/commands --target-dir .github/prompts \
+           --source-format gemini --target-format copilot \
+           --config-type slash-command
+
+  # Sync Copilot prompts to Gemini custom commands
+  %(prog)s --source-dir .github/prompts --target-dir ~/.gemini/commands \
+           --source-format copilot --target-format gemini \
+           --config-type slash-command
+
   # Single file conversion (auto-detect source, auto-generate output)
   %(prog)s --convert-file ~/.claude/agents/planner.md --target-format copilot
 
