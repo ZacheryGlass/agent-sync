@@ -142,7 +142,7 @@ class TestCLIImprovements:
 
     def test_dynamic_format_choices(self, capsys):
         """Test that format choices are dynamically loaded from registry."""
-        with patch('cli.main.setup_registry') as mock_setup:
+        with patch.object(sys.modules['cli.main'], 'setup_registry') as mock_setup:
             registry = FormatRegistry()
             registry.register(MockAdapter())
             mock_setup.return_value = registry

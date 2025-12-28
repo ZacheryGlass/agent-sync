@@ -493,7 +493,7 @@ class TestSyncInvocation:
         """SyncStateManager is properly initialized."""
         custom_state = tmp_path / "custom_state.json"
 
-        with patch('cli.main.SyncStateManager') as mock_sm:
+        with patch.object(sys.modules['cli.main'], 'SyncStateManager') as mock_sm:
             mock_instance = MagicMock()
             mock_sm.return_value = mock_instance
 
