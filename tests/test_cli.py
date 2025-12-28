@@ -343,6 +343,9 @@ class TestErrorHandling:
         ])
         
         assert result != 0
+        captured = capsys.readouterr()
+        # Check that error message mentions unsupported config type
+        assert 'does not support' in captured.err.lower()
 
 
 class TestSyncInvocation:
