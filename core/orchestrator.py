@@ -168,6 +168,9 @@ class UniversalSyncOrchestrator:
             'errors': 0
         }
 
+        # Accumulated warnings from all conversions
+        self.accumulated_warnings = []
+
     def sync(self):
         """
         Execute sync operation.
@@ -488,13 +491,15 @@ class UniversalSyncOrchestrator:
                     # In dry-run, use existing mtime or current time for new files
                     target_mtime = pair.target_mtime or datetime.now().timestamp()
 
-                # Log conversion warnings
+                # Log conversion warnings and accumulate for strict mode checking
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
@@ -543,13 +548,15 @@ class UniversalSyncOrchestrator:
                     # In dry-run, use existing mtime or current time for new files
                     source_mtime = pair.source_mtime or datetime.now().timestamp()
 
-                # Log conversion warnings
+                # Log conversion warnings and accumulate for strict mode checking
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
@@ -600,6 +607,15 @@ class UniversalSyncOrchestrator:
         """Print message if verbose mode enabled."""
         if self.verbose:
             self.logger(message)
+
+    def get_accumulated_warnings(self) -> List[str]:
+        """
+        Get all warnings accumulated during sync operations.
+        
+        Returns:
+            List of warning messages from all conversions
+        """
+        return self.accumulated_warnings.copy()
 
     def _print_summary(self):
         """Print sync statistics summary."""
@@ -695,6 +711,17 @@ class UniversalSyncOrchestrator:
                 self.conversion_options
             )
 
+            # Log warnings from source->target conversion and accumulate
+            for warning in self.source_adapter.get_warnings():
+                self.logger(f"  Warning: {warning}")
+                self.accumulated_warnings.append(warning)
+            self.source_adapter.clear_conversion_warnings()
+
+            for warning in self.target_adapter.get_warnings():
+                self.logger(f"  Warning: {warning}")
+                self.accumulated_warnings.append(warning)
+            self.target_adapter.clear_conversion_warnings()
+
             # 5. Write target (unless dry run or no changes)
             target_changed = merged_content != target_content
             if not dry_run:
@@ -730,6 +757,17 @@ class UniversalSyncOrchestrator:
                     source_merged_canonical, self.config_type,
                     self.conversion_options
                 )
+
+                # Log warnings from target->source conversion and accumulate
+                for warning in self.source_adapter.get_warnings():
+                    self.logger(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
+                self.source_adapter.clear_conversion_warnings()
+
+                for warning in self.target_adapter.get_warnings():
+                    self.logger(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
+                self.target_adapter.clear_conversion_warnings()
 
                 # Write source (unless dry run or no changes)
                 source_changed = source_merged_content != source_content
