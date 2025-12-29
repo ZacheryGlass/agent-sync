@@ -210,7 +210,7 @@ Examples:
     parser.add_argument(
         '--strict',
         action='store_true',
-        help='Error on lossy conversions (e.g., Claude deny rules downgraded to VS Code ask)'
+        help='Error on lossy conversions before any writes. In bidirectional mode, checks both directions before failing.'
     )
 
     parser.add_argument(

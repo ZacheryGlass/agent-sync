@@ -219,16 +219,30 @@ python -m cli.main \
   --target-format copilot \
   --config-type permission \
   --strict
+
+# Strict mode with bidirectional in-place sync
+# Checks both directions before any writes
+python -m cli.main \
+  --sync-file ~/.claude/settings.json \
+  --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
+  --source-format claude \
+  --target-format copilot \
+  --config-type permission \
+  --bidirectional \
+  --strict
 ```
 
 When `--strict` is enabled:
-- Lossy conversions trigger an error (exit code 1)
+- Lossy conversions trigger an error (exit code 1) **before any files are modified**
+- In bidirectional mode, both directions are checked for warnings before any writes occur
+- If either direction produces warnings, the entire operation fails and no files are modified
 - Warnings are displayed showing which rules were affected
 - Useful for ensuring no security rules are silently downgraded
 - Recommended for production permission sync workflows
 
 Without `--strict`:
 - Lossy conversions generate warnings but sync succeeds
+- Files are written despite warnings
 - Warnings are logged to stderr for visibility
 - Appropriate for development and testing scenarios
 
