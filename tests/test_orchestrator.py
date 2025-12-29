@@ -2477,3 +2477,191 @@ class TestSyncFileCLI:
         ])
 
         assert result == EXIT_ERROR
+
+
+class TestOrchestratorStrictMode:
+    """Tests for strict mode in orchestrator."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    def test_strict_mode_fails_on_warnings_directory_sync(self, registry, state_manager, tmp_path):
+        """Test that strict mode causes orchestrator to raise exception when warnings occur during directory sync."""
+        from unittest.mock import MagicMock
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create a source file
+        source_file = source_dir / "settings.json"
+        source_file.write_text('{"permissions": {"allow": ["cmd1"], "deny": ["cmd2"], "ask": []}}')
+
+        # Create orchestrator with strict mode enabled
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='source-to-target',
+            dry_run=False,
+            force=False,
+            verbose=False,
+            strict=True
+        )
+
+        # Mock target adapter to generate warnings
+        original_from_canonical = orchestrator.target_adapter.from_canonical
+        def mock_from_canonical(*args, **kwargs):
+            result = original_from_canonical(*args, **kwargs)
+            orchestrator.target_adapter.warnings.append("Test warning: lossy conversion")
+            return result
+        
+        orchestrator.target_adapter.from_canonical = mock_from_canonical
+
+        # Sync should raise exception due to strict mode
+        with pytest.raises(RuntimeError, match="Lossy conversion detected in strict mode"):
+            orchestrator.sync()
+
+    def test_strict_mode_succeeds_without_warnings(self, registry, state_manager, tmp_path):
+        """Test that strict mode succeeds when no warnings are present."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create a source file with no lossy conversions
+        source_file = source_dir / "settings.json"
+        source_file.write_text('{"permissions": {"allow": ["cmd1"], "deny": [], "ask": []}}')
+
+        # Create orchestrator with strict mode enabled
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='source-to-target',
+            dry_run=False,
+            force=False,
+            verbose=False,
+            strict=True
+        )
+
+        # Sync should succeed without exceptions
+        orchestrator.sync()
+
+        # Verify target file was created
+        target_file = target_dir / "settings.perm.json"
+        assert target_file.exists()
+
+    def test_strict_mode_in_place_sync_fails_on_warnings(self, registry, state_manager, tmp_path):
+        """Test that strict mode causes in-place sync to raise exception when warnings occur."""
+        from unittest.mock import MagicMock
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create source and target files
+        source_file = source_dir / "settings.json"
+        target_file = target_dir / "settings.perm.json"
+        source_file.write_text('{"permissions": {"allow": ["cmd1"], "deny": ["cmd2"], "ask": []}}')
+        target_file.write_text('{"chat.tools.terminal.autoApprove": {"cmd1": true}}')
+
+        # Create orchestrator with strict mode enabled
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='both',
+            dry_run=False,
+            force=False,
+            verbose=False,
+            strict=True
+        )
+
+        # Mock target adapter to generate warnings
+        original_from_canonical = orchestrator.target_adapter.from_canonical
+        def mock_from_canonical(*args, **kwargs):
+            result = original_from_canonical(*args, **kwargs)
+            orchestrator.target_adapter.warnings.append("Test warning: lossy conversion")
+            return result
+        
+        orchestrator.target_adapter.from_canonical = mock_from_canonical
+
+        # In-place sync should raise exception due to strict mode
+        with pytest.raises(RuntimeError, match="Lossy conversion detected in strict mode"):
+            orchestrator.sync_files_in_place(
+                source_path=source_file,
+                target_path=target_file,
+                bidirectional=False,
+                dry_run=False
+            )
+
+    def test_strict_mode_disabled_allows_warnings(self, registry, state_manager, tmp_path):
+        """Test that with strict mode disabled, warnings don't cause errors."""
+        from unittest.mock import MagicMock
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create a source file
+        source_file = source_dir / "settings.json"
+        source_file.write_text('{"permissions": {"allow": ["cmd1"], "deny": ["cmd2"], "ask": []}}')
+
+        # Create orchestrator with strict mode DISABLED
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction='source-to-target',
+            dry_run=False,
+            force=False,
+            verbose=False,
+            strict=False  # Disabled
+        )
+
+        # Mock target adapter to generate warnings
+        original_from_canonical = orchestrator.target_adapter.from_canonical
+        def mock_from_canonical(*args, **kwargs):
+            result = original_from_canonical(*args, **kwargs)
+            orchestrator.target_adapter.warnings.append("Test warning: lossy conversion")
+            return result
+        
+        orchestrator.target_adapter.from_canonical = mock_from_canonical
+
+        # Sync should succeed even with warnings
+        orchestrator.sync()
+
+        # Verify target file was created
+        target_file = target_dir / "settings.perm.json"
+        assert target_file.exists()

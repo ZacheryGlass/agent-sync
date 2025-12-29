@@ -84,6 +84,7 @@ class UniversalSyncOrchestrator:
                  dry_run: bool = False,
                  force: bool = False,
                  verbose: bool = False,
+                 strict: bool = False,
                  conversion_options: Optional[Dict[str, Any]] = None,
                  logger: Optional[Any] = None,
                  conflict_resolver: Optional[Any] = None):
@@ -102,6 +103,7 @@ class UniversalSyncOrchestrator:
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
+            strict: If True, fail fast on lossy conversions (warnings become errors)
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
             logger: Callback for logging output (default: print)
             conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
@@ -117,6 +119,7 @@ class UniversalSyncOrchestrator:
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
+        self.strict = strict
         self.conversion_options = conversion_options or {}
         self.logger = logger or print
         self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver
@@ -489,12 +492,20 @@ class UniversalSyncOrchestrator:
                     target_mtime = pair.target_mtime or datetime.now().timestamp()
 
                 # Log conversion warnings
-                for warning in self.source_adapter.get_warnings():
+                source_warnings = self.source_adapter.get_warnings()
+                target_warnings = self.target_adapter.get_warnings()
+                all_warnings = source_warnings + target_warnings
+                
+                for warning in all_warnings:
                     self.log(f"  Warning: {warning}")
+                
+                # Check for strict mode violations
+                if self.strict and all_warnings:
+                    self.source_adapter.clear_conversion_warnings()
+                    self.target_adapter.clear_conversion_warnings()
+                    raise RuntimeError(f"Lossy conversion detected in strict mode for {pair.base_name}")
+                
                 self.source_adapter.clear_conversion_warnings()
-
-                for warning in self.target_adapter.get_warnings():
-                    self.log(f"  Warning: {warning}")
                 self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
@@ -544,12 +555,20 @@ class UniversalSyncOrchestrator:
                     source_mtime = pair.source_mtime or datetime.now().timestamp()
 
                 # Log conversion warnings
-                for warning in self.source_adapter.get_warnings():
+                source_warnings = self.source_adapter.get_warnings()
+                target_warnings = self.target_adapter.get_warnings()
+                all_warnings = source_warnings + target_warnings
+                
+                for warning in all_warnings:
                     self.log(f"  Warning: {warning}")
+                
+                # Check for strict mode violations
+                if self.strict and all_warnings:
+                    self.source_adapter.clear_conversion_warnings()
+                    self.target_adapter.clear_conversion_warnings()
+                    raise RuntimeError(f"Lossy conversion detected in strict mode for {pair.base_name}")
+                
                 self.source_adapter.clear_conversion_warnings()
-
-                for warning in self.target_adapter.get_warnings():
-                    self.log(f"  Warning: {warning}")
                 self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
@@ -587,6 +606,9 @@ class UniversalSyncOrchestrator:
                 self.stats['deletions'] += 1
 
         except (IOError, ValueError, RuntimeError) as e:
+            # In strict mode, re-raise RuntimeError to fail fast
+            if self.strict and isinstance(e, RuntimeError):
+                raise
             self.logger(f"  Error syncing {pair.base_name}: {e}")
             self.stats['errors'] += 1
         except Exception as e:
@@ -695,6 +717,22 @@ class UniversalSyncOrchestrator:
                 self.conversion_options
             )
 
+            # Check for warnings in strict mode (after first conversion)
+            source_warnings_1 = self.source_adapter.get_warnings()
+            target_warnings_1 = self.target_adapter.get_warnings()
+            all_warnings_1 = source_warnings_1 + target_warnings_1
+            
+            for warning in all_warnings_1:
+                self.logger(f"Warning: {warning}")
+            
+            if self.strict and all_warnings_1:
+                self.source_adapter.clear_conversion_warnings()
+                self.target_adapter.clear_conversion_warnings()
+                raise RuntimeError(f"Lossy conversion detected in strict mode")
+            
+            self.source_adapter.clear_conversion_warnings()
+            self.target_adapter.clear_conversion_warnings()
+
             # 5. Write target (unless dry run or no changes)
             target_changed = merged_content != target_content
             if not dry_run:
@@ -730,6 +768,22 @@ class UniversalSyncOrchestrator:
                     source_merged_canonical, self.config_type,
                     self.conversion_options
                 )
+
+                # Check for warnings in strict mode (after second conversion)
+                source_warnings_2 = self.source_adapter.get_warnings()
+                target_warnings_2 = self.target_adapter.get_warnings()
+                all_warnings_2 = source_warnings_2 + target_warnings_2
+                
+                for warning in all_warnings_2:
+                    self.logger(f"Warning: {warning}")
+                
+                if self.strict and all_warnings_2:
+                    self.source_adapter.clear_conversion_warnings()
+                    self.target_adapter.clear_conversion_warnings()
+                    raise RuntimeError(f"Lossy conversion detected in strict mode")
+                
+                self.source_adapter.clear_conversion_warnings()
+                self.target_adapter.clear_conversion_warnings()
 
                 # Write source (unless dry run or no changes)
                 source_changed = source_merged_content != source_content
