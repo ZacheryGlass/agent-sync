@@ -84,6 +84,7 @@ class UniversalSyncOrchestrator:
                  dry_run: bool = False,
                  force: bool = False,
                  verbose: bool = False,
+                 strict: bool = False,
                  conversion_options: Optional[Dict[str, Any]] = None,
                  logger: Optional[Any] = None,
                  conflict_resolver: Optional[Any] = None):
@@ -102,6 +103,7 @@ class UniversalSyncOrchestrator:
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
+            strict: If True, fail on first lossy conversion (pre-write)
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
             logger: Callback for logging output (default: print)
             conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
@@ -117,6 +119,7 @@ class UniversalSyncOrchestrator:
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
+        self.strict = strict
         self.conversion_options = conversion_options or {}
         self.logger = logger or print
         self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver

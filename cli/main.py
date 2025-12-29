@@ -479,6 +479,7 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run,
                 force=args.force,
                 verbose=args.verbose,
+                strict=args.strict,
                 conversion_options=conversion_options
             )
 
@@ -580,6 +581,7 @@ def main(argv: Optional[list] = None):
             dry_run=args.dry_run,
             force=args.force,
             verbose=args.verbose,
+            strict=args.strict,
             conversion_options=conversion_options if conversion_options else None
         )
 
