@@ -1534,6 +1534,45 @@ description: Test
         captured = capsys.readouterr()
         assert "Summary" in captured.out or "=" * 10 in captured.out
 
+    def test_directory_sync_accumulates_warnings(self, registry, state_manager, tmp_path):
+        """Test that directory sync accumulates warnings from conversions."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create source file with deny rules (will generate warnings)
+        source_file = source_dir / "settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)"],
+                "deny": ["Bash(rm:*)"],  # Will cause warning
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=state_manager,
+            direction="both",
+            dry_run=False,
+            force=False,
+            verbose=False
+        )
+
+        orchestrator.sync()
+
+        # Check that warnings were accumulated
+        warnings = orchestrator.get_accumulated_warnings()
+        assert len(warnings) > 0
+        assert any("deny rule" in w.lower() for w in warnings)
+
 
 class TestExtractBaseName:
     """Tests for _extract_base_name helper method."""
@@ -2148,6 +2187,158 @@ class TestSyncFilesInPlace:
 
         # Stats should NOT be incremented when no changes made
         assert orchestrator.stats['source_to_target'] == 0
+
+    def test_sync_files_in_place_with_warnings_accumulated(self, tmp_path):
+        """Test that warnings are accumulated during in-place sync."""
+        # Create source with deny rules (will generate warnings)
+        source_file = tmp_path / "source_settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)"],
+                "deny": ["Bash(rm:*)"],  # Will cause warning when converting to Copilot
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        # Create target file (Copilot format)
+        target_file = tmp_path / "target_settings.json"
+        target_content = {
+            "permissions": {
+                "allow": ["Bash(ls:*)"],
+                "deny": [],
+                "ask": []
+            }
+        }
+        target_file.write_text(json.dumps(target_content))
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=False,
+            dry_run=False
+        )
+
+        # Check that warnings were accumulated
+        warnings = orchestrator.get_accumulated_warnings()
+        assert len(warnings) > 0
+        assert any("deny rule" in w.lower() for w in warnings)
+
+    def test_sync_files_in_place_bidirectional_accumulates_all_warnings(self, tmp_path):
+        """Test that bidirectional sync accumulates warnings from both directions."""
+        # Create source with deny rules
+        source_file = tmp_path / "source_settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)"],
+                "deny": ["Bash(rm:*)"],  # Will cause warning Claude->Copilot
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        # Create target with deny rules
+        target_file = tmp_path / "target_settings.json"
+        target_content = {
+            "permissions": {
+                "allow": ["Bash(ls:*)"],
+                "deny": ["Bash(sudo:*)"],  # Will be merged but no warning Copilot->Claude (Claude supports deny)
+                "ask": []
+            }
+        }
+        target_file.write_text(json.dumps(target_content))
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=True,
+            dry_run=False
+        )
+
+        # Check that warnings were accumulated (at least from Claude->Copilot)
+        warnings = orchestrator.get_accumulated_warnings()
+        assert len(warnings) >= 1
+        # The deny rule from Claude should generate a warning
+        warning_text = ' '.join(warnings)
+        assert "rm" in warning_text  # From the deny rule
+
+    def test_sync_files_in_place_dry_run_accumulates_warnings(self, tmp_path):
+        """Test that dry-run mode still accumulates warnings."""
+        # Create source with deny rules
+        source_file = tmp_path / "source_settings.json"
+        source_content = {
+            "permissions": {
+                "allow": ["Bash(git:*)"],
+                "deny": ["Bash(rm:*)"],
+                "ask": []
+            }
+        }
+        source_file.write_text(json.dumps(source_content))
+
+        # Create target file
+        target_file = tmp_path / "target_settings.json"
+        target_content = {
+            "permissions": {
+                "allow": ["Bash(ls:*)"],
+                "deny": [],
+                "ask": []
+            }
+        }
+        target_file.write_text(json.dumps(target_content))
+
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+
+        orchestrator = UniversalSyncOrchestrator(
+            source_dir=tmp_path,
+            target_dir=tmp_path,
+            source_format="claude",
+            target_format="copilot",
+            config_type=ConfigType.PERMISSION,
+            format_registry=registry,
+            state_manager=SyncStateManager()
+        )
+
+        orchestrator.sync_files_in_place(
+            source_path=source_file,
+            target_path=target_file,
+            bidirectional=False,
+            dry_run=True  # Dry run should still capture warnings
+        )
+
+        # Check that warnings were accumulated even in dry-run
+        warnings = orchestrator.get_accumulated_warnings()
+        assert len(warnings) > 0
+        assert any("deny rule" in w.lower() for w in warnings)
 
 
 class TestMergeAgents:
