@@ -84,6 +84,7 @@ class UniversalSyncOrchestrator:
                  dry_run: bool = False,
                  force: bool = False,
                  verbose: bool = False,
+                 strict: bool = False,
                  conversion_options: Optional[Dict[str, Any]] = None,
                  logger: Optional[Any] = None,
                  conflict_resolver: Optional[Any] = None):
@@ -102,6 +103,7 @@ class UniversalSyncOrchestrator:
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
+            strict: If True, error on lossy conversions
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
             logger: Callback for logging output (default: print)
             conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
@@ -117,6 +119,7 @@ class UniversalSyncOrchestrator:
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
+        self.strict = strict
         self.conversion_options = conversion_options or {}
         self.logger = logger or print
         self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver
@@ -651,11 +654,17 @@ class UniversalSyncOrchestrator:
         into target (rather than replacing the entire target file). Optionally, changes
         from target can be merged back into source.
 
+        In strict mode, warnings are checked for both directions BEFORE any writes occur.
+        If either direction produces warnings, the entire operation fails and no files are modified.
+
         Args:
             source_path: Path to source config file
             target_path: Path to target config file
             bidirectional: If True, sync changes both ways
             dry_run: If True, show changes without writing
+
+        Raises:
+            ValueError: If lossy conversions detected in strict mode
         """
         self.log(f"Syncing files in-place (merge mode):")
         self.log(f"  Source: {source_path}")
@@ -666,6 +675,8 @@ class UniversalSyncOrchestrator:
             self.log(f"  Direction: {self.source_format} -> {self.target_format}")
         if dry_run:
             self.log("  Mode: DRY RUN (no changes will be made)")
+        if self.strict:
+            self.log("  Mode: STRICT (fail on lossy conversions)")
         self.log("")  # Blank line for readability
 
         try:
@@ -675,27 +686,75 @@ class UniversalSyncOrchestrator:
             if not target_path.exists():
                 raise IOError(f"Target file not found: {target_path}")
 
-            # 1. Read target content for comparison
+            # Read both files for comparison
+            source_content = source_path.read_text(encoding='utf-8')
             target_content = target_path.read_text(encoding='utf-8')
 
-            # 2. Convert both to canonical
+            # Convert both to canonical
             source_canonical = self.source_adapter.read(source_path, self.config_type)
             target_canonical = self.target_adapter.read(target_path, self.config_type)
 
-            # 3. Merge source into target
+            # Clear any warnings from reading
+            self.source_adapter.clear_conversion_warnings()
+            self.target_adapter.clear_conversion_warnings()
+
+            # === FORWARD DIRECTION: Source -> Target ===
+            # Merge source into target
             merged_canonical = self._merge_canonical(
                 source=source_canonical,
                 target=target_canonical,
                 config_type=self.config_type
             )
 
-            # 4. Convert merged result back to target format
+            # Convert merged result back to target format
             merged_content = self.target_adapter.from_canonical(
                 merged_canonical, self.config_type,
                 self.conversion_options
             )
 
-            # 5. Write target (unless dry run or no changes)
+            # Check for warnings in forward direction
+            forward_warnings = self.target_adapter.get_warnings()
+            if forward_warnings:
+                for warning in forward_warnings:
+                    self.logger(f"  Warning ({self.source_format} -> {self.target_format}): {warning}")
+
+            # === BACKWARD DIRECTION (if bidirectional): Target -> Source ===
+            backward_warnings = []
+            source_merged_content = None
+            if bidirectional:
+                # Merge target into source
+                source_merged_canonical = self._merge_canonical(
+                    source=target_canonical,
+                    target=source_canonical,
+                    config_type=self.config_type
+                )
+
+                # Convert back to source format
+                source_merged_content = self.source_adapter.from_canonical(
+                    source_merged_canonical, self.config_type,
+                    self.conversion_options
+                )
+
+                # Check for warnings in backward direction
+                backward_warnings = self.source_adapter.get_warnings()
+                if backward_warnings:
+                    for warning in backward_warnings:
+                        self.logger(f"  Warning ({self.target_format} -> {self.source_format}): {warning}")
+
+            # === STRICT MODE CHECK ===
+            # In strict mode, if ANY direction has warnings, fail before writing
+            all_warnings = forward_warnings + backward_warnings
+            if self.strict and all_warnings:
+                self.logger("")
+                self.logger("Error: Lossy conversions detected in strict mode")
+                if bidirectional:
+                    self.logger("No files were modified (bidirectional sync aborted)")
+                else:
+                    self.logger("No files were modified (sync aborted)")
+                raise ValueError("Lossy conversions detected with --strict flag")
+
+            # === WRITE FILES ===
+            # Forward direction: Write target
             target_changed = merged_content != target_content
             if not dry_run:
                 if target_changed:
@@ -711,27 +770,8 @@ class UniversalSyncOrchestrator:
                 else:
                     self.logger(f"No changes needed for {self.target_format}: {target_path}")
 
-            # 6. If bidirectional, merge target changes back into source
-            if bidirectional:
-                # Read source content for comparison
-                source_content = source_path.read_text(encoding='utf-8')
-                
-                merged_target_canonical = self.target_adapter.read(target_path, self.config_type) if not dry_run else merged_canonical
-
-                # Merge target into source
-                source_merged_canonical = self._merge_canonical(
-                    source=merged_target_canonical,
-                    target=source_canonical,
-                    config_type=self.config_type
-                )
-
-                # Convert back to source format
-                source_merged_content = self.source_adapter.from_canonical(
-                    source_merged_canonical, self.config_type,
-                    self.conversion_options
-                )
-
-                # Write source (unless dry run or no changes)
+            # Backward direction: Write source (if bidirectional)
+            if bidirectional and source_merged_content:
                 source_changed = source_merged_content != source_content
                 if not dry_run:
                     if source_changed:
@@ -746,6 +786,10 @@ class UniversalSyncOrchestrator:
                         self.stats['target_to_source'] += 1
                     else:
                         self.logger(f"No changes needed for {self.source_format}: {source_path}")
+
+            # Clear warnings after successful write
+            self.source_adapter.clear_conversion_warnings()
+            self.target_adapter.clear_conversion_warnings()
 
             self._print_summary()
 

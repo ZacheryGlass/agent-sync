@@ -479,6 +479,7 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run,
                 force=args.force,
                 verbose=args.verbose,
+                strict=args.strict,
                 conversion_options=conversion_options
             )
 
@@ -490,16 +491,8 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run
             )
 
-            # Check for conversion warnings with --strict
-            source_warnings = orchestrator.source_adapter.get_warnings()
-            target_warnings = orchestrator.target_adapter.get_warnings()
-            all_warnings = source_warnings + target_warnings
-
-            if all_warnings and args.strict:
-                print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
-                print("See warnings above for details.", file=sys.stderr)
-                return EXIT_ERROR
-
+            # Note: With strict mode, warnings are checked inside sync_files_in_place
+            # and will raise ValueError before any writes occur
             return EXIT_SUCCESS
 
         except KeyboardInterrupt:
@@ -582,6 +575,7 @@ def main(argv: Optional[list] = None):
             dry_run=args.dry_run,
             force=args.force,
             verbose=args.verbose,
+            strict=args.strict,
             conversion_options=conversion_options if conversion_options else None
         )
 
