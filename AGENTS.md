@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a universal synchronization tool for AI coding agent configurations. It supports syncing between multiple AI tools (Claude Code, GitHub Copilot, and others) and multiple config types (agents, permissions, slash commands).
+This is a universal synchronization tool for AI coding agent configurations. It supports syncing between multiple AI tools (Claude Code, GitHub Copilot, Gemini CLI, and others) and multiple config types (agents, permissions, slash commands).
+
+**Note:** Gemini CLI support is limited to custom commands (slash command equivalent only). Agents and permissions are not supported due to architectural differences. See `docs/gemini-vs-claude-copilot.md` for detailed comparison.
 
 The project uses a hub-and-spoke architecture with canonical data models, enabling N-way sync with 2N converters instead of N² converters.
 
@@ -70,6 +72,21 @@ python -m cli.main \
   --target-format copilot \
   --config-type permission \
   --bidirectional
+
+# Sync custom commands with Gemini CLI
+python -m cli.main \
+  --source-dir ~/.gemini/commands \
+  --target-dir ~/.claude/commands \
+  --source-format gemini \
+  --target-format claude \
+  --config-type slash-command \
+  --dry-run
+
+# Convert single Gemini command to Copilot format
+python -m cli.main \
+  --convert-file ~/.gemini/commands/git/commit.toml \
+  --target-format copilot \
+  --output .github/prompts/git-commit.prompt.md
 ```
 
 ### Testing
@@ -139,7 +156,8 @@ Format A → Canonical Model ← Format B
 6. **adapters/shared/** - Shared utilities and handler interface
 7. **adapters/claude/** - Claude Code adapter with agent and permission handlers
 8. **adapters/copilot/** - GitHub Copilot adapter with agent and permission handlers
-9. **adapters/example/** - Template for new adapter implementations
+9. **adapters/gemini/** - Gemini CLI adapter (slash commands only)
+10. **adapters/example/** - Template for new adapter implementations
 
 ### Key Design Decisions
 
@@ -220,25 +238,27 @@ Reusable prompt templates invoked via special syntax. Slash commands allow users
 **File patterns:**
 - Claude: `command-name.md` (in `~/.claude/commands/`)
 - Copilot: `command-name.prompt.md` (in `.github/prompts/`)
+- Gemini: `command-name.toml` (in `~/.gemini/commands/`)
 
 **Field Mapping:**
 
-| Field | Claude | Copilot | Conversion Notes |
-|-------|--------|---------|------------------|
-| `name` | Optional (from filename) | Required in frontmatter | Auto-derived from filename if missing |
-| `description` | Optional | Optional | Direct mapping |
-| `instructions` | Markdown body | Markdown body | Direct mapping |
-| `argument-hint` | Optional | Optional | Direct mapping |
-| `model` | Optional | Optional | No model name mapping (passed through) |
-| `allowed-tools` | Comma-separated string | YAML list | Format conversion |
-| `disable-model-invocation` | Claude-specific | - | Preserved in metadata |
-| `agent` | - | Copilot-specific | Preserved in metadata |
+| Field | Claude | Copilot | Gemini | Conversion Notes |
+|-------|--------|---------|--------|------------------|
+| `name` | Optional (from filename) | Required in frontmatter | From file path (namespaced) | Auto-derived from filename; Gemini uses `:` separator |
+| `description` | Optional | Optional | Optional | Direct mapping |
+| `instructions` | Markdown body | Markdown body | `prompt` field | Direct mapping |
+| `argument-hint` | Optional | Optional | Not supported | Lost when converting to Gemini |
+| `model` | Optional | Optional | Not supported per-command | Lost when converting to Gemini (use aliases) |
+| `allowed-tools` | Comma-separated string | YAML list | Not supported per-command | Lost when converting to Gemini |
+| `disable-model-invocation` | Claude-specific | - | - | Preserved in metadata |
+| `agent` | - | Copilot-specific | - | Preserved in metadata |
 
 **Variable Syntax Differences:**
 
-Claude and Copilot use different variable syntaxes (not automatically converted):
+Claude, Copilot, and Gemini use different variable syntaxes (not automatically converted):
 - Claude: `$ARGUMENTS`, `!backtick commands` (e.g., `!git status`)
 - Copilot: `${selection}`, `${file}`, `${input:name:prompt}`, `#tool:name`
+- Gemini: `{{args}}`, `!{command}` (e.g., `!{git status}`), `@{file}` (e.g., `@{README.md}`)
 
 **Conversion Examples:**
 
@@ -277,10 +297,62 @@ Follow conventional commit format.
 - `claude_disable_model_invocation`: Preserved for round-trip Claude → Copilot → Claude
 - `copilot_agent`: Preserved for round-trip Copilot → Claude → Copilot
 
+*Converts to Gemini:*
+```toml
+# File: ~/.gemini/commands/commit.toml
+# Invoked as: /commit
+
+description = "Create a git commit"
+
+prompt = """
+Create a git commit: {{args}}
+
+Follow conventional commit format.
+"""
+```
+
+**Gemini Namespace Example:**
+
+*Gemini custom command with namespace:*
+```toml
+# File: ~/.gemini/commands/git/review.toml
+# Invoked as: /git:review
+
+description = "Review git changes before commit"
+
+prompt = """
+Review the following changes:
+
+!{git status}
+!{git diff --staged}
+
+Provide a code review and suggest improvements.
+{{args}}
+"""
+```
+
+*Converts to Claude:*
+```markdown
+---
+description: Review git changes before commit
+---
+
+Review the following changes:
+
+!git status
+!git diff --staged
+
+Provide a code review and suggest improvements.
+$ARGUMENTS
+```
+
 **Conversion Limitations:**
-- Variable syntax not automatically converted (must manually adjust `$ARGUMENTS` vs `${selection}`)
-- File reference syntax differs (`!backtick` vs `#tool:`)
+- Variable syntax not automatically converted (must manually adjust `$ARGUMENTS` vs `${selection}` vs `{{args}}`)
+- File reference syntax differs (`!backtick` vs `#tool:` vs `@{file}`)
+- Gemini shell syntax `!{...}` vs Claude `!backtick` requires manual conversion
 - No model name mapping (passed through as-is)
+- Gemini's per-command model/tool restrictions not supported (lost in conversion)
+- Gemini namespace (e.g., `git:review`) preserved in metadata but affects file naming
 - Format-specific features preserved in metadata but not actively used
 
 ## In-Place Sync Mode (Bidirectional)
@@ -421,18 +493,20 @@ agent-sync/
 - Claude slash commands: `~/.claude/commands/` or `.claude/commands/`
 - Copilot agents: `.github/agents/`
 - Copilot prompts: `.github/prompts/`
+- Gemini custom commands: `~/.gemini/commands/` or `<project>/.gemini/commands/`
 
 ## Development Status
 
 **Functional:**
 - Core canonical models (agents, permissions, slash commands)
 - Claude and Copilot adapters (agents, permissions, slash commands)
+- Gemini adapter (slash commands only)
 - Format registry
 - State manager
 - CLI interface (directory sync and single-file conversion)
 - Universal orchestrator
 - Bidirectional permission conversion (Copilot ↔ Claude)
-- Bidirectional slash-command conversion (Copilot ↔ Claude)
+- Bidirectional slash-command conversion (Copilot ↔ Claude ↔ Gemini)
 
 **In Development:**
 - Additional format adapters
@@ -465,5 +539,48 @@ agent-sync/
 6. Add fixtures in `tests/fixtures/newformat/`
 
 See `adapters/example/` for a complete template with detailed TODOs and examples.
+
+### Lessons Learned from Gemini Implementation
+
+**Partial Format Support Pattern:**
+- Not all formats support all config types (agents, permissions, slash commands)
+- Gemini only supports slash commands due to architectural differences
+- Document limitations clearly in project overview and adapter implementation
+- Use `supported_config_types` in adapter to enforce restrictions at runtime
+
+**TOML Parsing Requirements:**
+- Add `tomli` (Python < 3.11) and `tomli-w` (all versions) dependencies
+- Include in both `requirements.txt` and `pyproject.toml` for consistency
+- Use conditional imports to handle Python 3.11+ built-in `tomllib`
+
+**Metadata Preservation for Format-Specific Features:**
+- Preserve unique syntax in metadata dict (e.g., `gemini_namespace`, shell placeholders)
+- Enable round-trip fidelity even when features don't map 1:1
+- Document what's preserved vs what's lost in conversion
+
+**Cross-Format Syntax Translation:**
+- Variable syntax differs across formats (`$ARGUMENTS` vs `${input}` vs `{{args}}`)
+- Shell command syntax varies (`!backtick` vs `#tool:Bash` vs `!{command}`)
+- Document that manual adjustment may be needed post-conversion
+- Consider adding syntax translation helpers for common patterns
+
+**Namespace and File Structure Differences:**
+- Gemini uses directory structure for namespacing (e.g., `git/commit.toml` → `/git:commit`)
+- Other formats use flat file structure
+- Preserve namespace info in metadata for round-trip conversion
+- Handle file naming edge cases (subdirectories, special characters)
+
+**Testing Philosophy:**
+- Write comprehensive integration tests for each format pair (N² tests for N formats)
+- Test round-trip conversion to verify metadata preservation
+- Include edge cases (empty fields, special characters, format-specific features)
+- Verify CLI integration for all supported operations
+
+**Documentation Requirements:**
+- Create detailed format research document (see `docs/gemini-format.md`)
+- Add comparison document when architectures differ significantly (see `docs/gemini-vs-claude-copilot.md`)
+- Update main documentation (AGENTS.md) with practical examples
+- Clearly state what's supported vs not supported
+
 - Keep all documentation very concise. Only what the engineers need to know.
 - All documentation is for the application developers. Not for the users!
