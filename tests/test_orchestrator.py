@@ -2477,3 +2477,83 @@ class TestSyncFileCLI:
         ])
 
         assert result == EXIT_ERROR
+
+
+class TestStrictModeDirectorySync:
+    """Tests for --strict flag with directory sync."""
+
+    @pytest.fixture
+    def setup_directories(self, tmp_path):
+        """Create source and target directories with permission files."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+        
+        # Create a Claude permission file with a deny rule (which will be lossy when converting to Copilot)
+        source_file = source_dir / "settings.json"
+        source_file.write_text(json.dumps({
+            "permissions": {
+                "allow": ["Bash(git:*)"],
+                "deny": ["Bash(rm:*)"],
+                "ask": []
+            }
+        }))
+        
+        return source_dir, target_dir
+
+    def test_strict_mode_directory_sync_fails_with_lossy_conversion(self, setup_directories, tmp_path):
+        """Test that directory sync with --strict fails when lossy conversions occur."""
+        source_dir, target_dir = setup_directories
+        
+        # Run directory sync with strict mode
+        result = main([
+            '--source-dir', str(source_dir),
+            '--target-dir', str(target_dir),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--config-type', 'permission',
+            '--strict'
+        ])
+        
+        # Should fail with error code due to lossy conversion (deny -> false/ask)
+        assert result == EXIT_ERROR
+        
+        # Target file should NOT be created in strict mode
+        target_file = target_dir / "settings.perm.json"
+        assert not target_file.exists(), "Target file should not be created when strict mode fails"
+
+
+    def test_strict_mode_directory_sync_succeeds_without_warnings(self, tmp_path):
+        """Test that directory sync with --strict succeeds when no lossy conversions occur."""
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+        
+        # Create a Claude permission file with only allow rules (no lossy conversion)
+        source_file = source_dir / "settings.json"
+        source_file.write_text(json.dumps({
+            "permissions": {
+                "allow": ["Bash(git:*)", "Bash(ls:*)"],
+                "deny": [],
+                "ask": []
+            }
+        }))
+        
+        # Run directory sync with strict mode
+        result = main([
+            '--source-dir', str(source_dir),
+            '--target-dir', str(target_dir),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--config-type', 'permission',
+            '--strict'
+        ])
+        
+        # Should succeed since there are no lossy conversions
+        assert result == EXIT_SUCCESS
+        
+        # Target file should be created
+        target_file = target_dir / "settings.perm.json"
+        assert target_file.exists(), "Target file should be created when conversion is clean"

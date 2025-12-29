@@ -84,6 +84,7 @@ class UniversalSyncOrchestrator:
                  dry_run: bool = False,
                  force: bool = False,
                  verbose: bool = False,
+                 strict: bool = False,
                  conversion_options: Optional[Dict[str, Any]] = None,
                  logger: Optional[Any] = None,
                  conflict_resolver: Optional[Any] = None):
@@ -102,6 +103,7 @@ class UniversalSyncOrchestrator:
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
+            strict: If True, error on lossy conversions
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
             logger: Callback for logging output (default: print)
             conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
@@ -117,9 +119,13 @@ class UniversalSyncOrchestrator:
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
+        self.strict = strict
         self.conversion_options = conversion_options or {}
         self.logger = logger or print
         self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver
+        
+        # Track all warnings from conversions for strict mode
+        self.accumulated_warnings = []
 
         # Get adapters from registry
         self.source_adapter = format_registry.get_adapter(source_format)
@@ -470,32 +476,49 @@ class UniversalSyncOrchestrator:
                     target_extension = self.target_adapter.get_file_extension(self.config_type)
                     target_path = self.target_dir / f"{pair.base_name}{target_extension}"
 
-                # Write to target (unless dry run)
+                # Convert to target format
                 if not self.dry_run:
                     try:
                         target_path.parent.mkdir(parents=True, exist_ok=True)
                     except Exception as e:
                         raise IOError(f"Failed to create directory {target_path.parent}: {e}")
-
+                    
+                    # Perform conversion
                     self.target_adapter.write(canonical, target_path, self.config_type,
                                               self.conversion_options)
-                    
-                    if not target_path.exists():
-                        raise IOError(f"Adapter write failed: file not found at {target_path}")
-
-                    target_mtime = target_path.stat().st_mtime
                 else:
-                    # In dry-run, use existing mtime or current time for new files
-                    target_mtime = pair.target_mtime or datetime.now().timestamp()
-
-                # Log conversion warnings
+                    # In dry-run, just do the conversion without writing
+                    # This ensures warnings are still generated
+                    _ = self.target_adapter.from_canonical(canonical, self.config_type,
+                                                          self.conversion_options)
+                
+                # Check for warnings and accumulate for strict mode
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
+                
+                # Check strict mode - fail fast if lossy conversions detected
+                # If strict mode fails, we need to delete the file we just wrote
+                if self.strict and self.accumulated_warnings:
+                    if not self.dry_run and target_path.exists():
+                        target_path.unlink()  # Delete the file we just created
+                    raise RuntimeError(f"Lossy conversions detected with --strict flag. "
+                                     f"See warnings above for details.")
+                
+                # Get mtime only after successful write
+                if not self.dry_run:
+                    if not target_path.exists():
+                        raise IOError(f"Adapter write failed: file not found at {target_path}")
+                    target_mtime = target_path.stat().st_mtime
+                else:
+                    # In dry-run, use existing mtime or current time for new files
+                    target_mtime = pair.target_mtime or datetime.now().timestamp()
 
                 # Update state (unless dry run)
                 if not self.dry_run:
@@ -525,7 +548,7 @@ class UniversalSyncOrchestrator:
                     source_extension = self.source_adapter.get_file_extension(self.config_type)
                     source_path = self.source_dir / f"{pair.base_name}{source_extension}"
 
-                # Write to source (unless dry run)
+                # Convert to source format
                 if not self.dry_run:
                     try:
                         source_path.parent.mkdir(parents=True, exist_ok=True)
@@ -534,23 +557,39 @@ class UniversalSyncOrchestrator:
 
                     self.source_adapter.write(canonical, source_path, self.config_type,
                                               self.conversion_options)
-                    
-                    if not source_path.exists():
-                        raise IOError(f"Adapter write failed: file not found at {source_path}")
-
-                    source_mtime = source_path.stat().st_mtime
                 else:
-                    # In dry-run, use existing mtime or current time for new files
-                    source_mtime = pair.source_mtime or datetime.now().timestamp()
-
-                # Log conversion warnings
+                    # In dry-run, just do the conversion without writing
+                    # This ensures warnings are still generated
+                    _ = self.source_adapter.from_canonical(canonical, self.config_type,
+                                                          self.conversion_options)
+                
+                # Check for warnings and accumulate for strict mode
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
+                
+                # Check strict mode - fail fast if lossy conversions detected
+                # If strict mode fails, we need to delete the file we just wrote
+                if self.strict and self.accumulated_warnings:
+                    if not self.dry_run and source_path.exists():
+                        source_path.unlink()  # Delete the file we just created
+                    raise RuntimeError(f"Lossy conversions detected with --strict flag. "
+                                     f"See warnings above for details.")
+                
+                # Get mtime only after successful write
+                if not self.dry_run:
+                    if not source_path.exists():
+                        raise IOError(f"Adapter write failed: file not found at {source_path}")
+                    source_mtime = source_path.stat().st_mtime
+                else:
+                    # In dry-run, use existing mtime or current time for new files
+                    source_mtime = pair.source_mtime or datetime.now().timestamp()
 
                 # Update state (unless dry run)
                 if not self.dry_run:
@@ -587,6 +626,10 @@ class UniversalSyncOrchestrator:
                 self.stats['deletions'] += 1
 
         except (IOError, ValueError, RuntimeError) as e:
+            # Re-raise RuntimeError if it's a strict mode error
+            error_msg = str(e)
+            if isinstance(e, RuntimeError) and "strict" in error_msg.lower() and "lossy" in error_msg.lower():
+                raise
             self.logger(f"  Error syncing {pair.base_name}: {e}")
             self.stats['errors'] += 1
         except Exception as e:
@@ -694,6 +737,22 @@ class UniversalSyncOrchestrator:
                 merged_canonical, self.config_type,
                 self.conversion_options
             )
+            
+            # Check for warnings and accumulate for strict mode
+            for warning in self.source_adapter.get_warnings():
+                self.log(f"  Warning: {warning}")
+                self.accumulated_warnings.append(warning)
+            self.source_adapter.clear_conversion_warnings()
+            
+            for warning in self.target_adapter.get_warnings():
+                self.log(f"  Warning: {warning}")
+                self.accumulated_warnings.append(warning)
+            self.target_adapter.clear_conversion_warnings()
+            
+            # Check strict mode - fail if lossy conversions detected
+            if self.strict and self.accumulated_warnings:
+                raise RuntimeError(f"Lossy conversions detected with --strict flag. "
+                                 f"See warnings above for details.")
 
             # 5. Write target (unless dry run or no changes)
             target_changed = merged_content != target_content
@@ -730,6 +789,22 @@ class UniversalSyncOrchestrator:
                     source_merged_canonical, self.config_type,
                     self.conversion_options
                 )
+                
+                # Check for warnings and accumulate for strict mode
+                for warning in self.source_adapter.get_warnings():
+                    self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
+                self.source_adapter.clear_conversion_warnings()
+                
+                for warning in self.target_adapter.get_warnings():
+                    self.log(f"  Warning: {warning}")
+                    self.accumulated_warnings.append(warning)
+                self.target_adapter.clear_conversion_warnings()
+                
+                # Check strict mode - fail if lossy conversions detected
+                if self.strict and self.accumulated_warnings:
+                    raise RuntimeError(f"Lossy conversions detected with --strict flag. "
+                                     f"See warnings above for details.")
 
                 # Write source (unless dry run or no changes)
                 source_changed = source_merged_content != source_content

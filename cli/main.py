@@ -479,6 +479,7 @@ def main(argv: Optional[list] = None):
                 dry_run=args.dry_run,
                 force=args.force,
                 verbose=args.verbose,
+                strict=args.strict,
                 conversion_options=conversion_options
             )
 
@@ -489,16 +490,6 @@ def main(argv: Optional[list] = None):
                 bidirectional=args.bidirectional,
                 dry_run=args.dry_run
             )
-
-            # Check for conversion warnings with --strict
-            source_warnings = orchestrator.source_adapter.get_warnings()
-            target_warnings = orchestrator.target_adapter.get_warnings()
-            all_warnings = source_warnings + target_warnings
-
-            if all_warnings and args.strict:
-                print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
-                print("See warnings above for details.", file=sys.stderr)
-                return EXIT_ERROR
 
             return EXIT_SUCCESS
 
@@ -582,27 +573,32 @@ def main(argv: Optional[list] = None):
             dry_run=args.dry_run,
             force=args.force,
             verbose=args.verbose,
+            strict=args.strict,
             conversion_options=conversion_options if conversion_options else None
         )
 
         # 7. Run sync
         orchestrator.sync()
 
-        # 8. Check for conversion warnings with --strict
-        source_warnings = orchestrator.source_adapter.get_warnings()
-        target_warnings = orchestrator.target_adapter.get_warnings()
-        all_warnings = source_warnings + target_warnings
-
-        if all_warnings and args.strict:
-            print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
-            print("See warnings above for details.", file=sys.stderr)
-            return EXIT_ERROR
-
         # Success
         return EXIT_SUCCESS
 
     except KeyboardInterrupt:
         print("\nSync cancelled by user", file=sys.stderr)
+        return EXIT_ERROR
+    except RuntimeError as e:
+        # Check if this is a strict mode error
+        error_msg = str(e)
+        if "strict" in error_msg.lower() and "lossy" in error_msg.lower():
+            print(f"\nError: {e}", file=sys.stderr)
+            return EXIT_ERROR
+        # Re-raise other RuntimeErrors
+        print(f"Error: {e}", file=sys.stderr)
+        if args.verbose:
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+        else:
+            print("Run with --verbose for detailed traceback", file=sys.stderr)
         return EXIT_ERROR
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
