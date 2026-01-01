@@ -2573,7 +2573,6 @@ class TestOrchestratorStrictMode:
 
     def test_strict_mode_in_place_sync_fails_on_warnings(self, registry, state_manager, tmp_path):
         """Test that strict mode causes in-place sync to raise exception when warnings occur."""
-        from unittest.mock import MagicMock
         
         source_dir = tmp_path / "source"
         target_dir = tmp_path / "target"
