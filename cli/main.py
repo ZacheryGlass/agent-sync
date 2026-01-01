@@ -592,14 +592,8 @@ def main(argv: Optional[list] = None):
         if "strict" in error_msg.lower() and "lossy" in error_msg.lower():
             print(f"\nError: {e}", file=sys.stderr)
             return EXIT_ERROR
-        # Re-raise other RuntimeErrors
-        print(f"Error: {e}", file=sys.stderr)
-        if args.verbose:
-            import traceback
-            traceback.print_exc(file=sys.stderr)
-        else:
-            print("Run with --verbose for detailed traceback", file=sys.stderr)
-        return EXIT_ERROR
+        # Re-raise other RuntimeErrors to be handled by the generic exception handler
+        raise
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         if args.verbose:
