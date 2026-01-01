@@ -84,6 +84,7 @@ class UniversalSyncOrchestrator:
                  dry_run: bool = False,
                  force: bool = False,
                  verbose: bool = False,
+                 strict: bool = False,
                  conversion_options: Optional[Dict[str, Any]] = None,
                  logger: Optional[Any] = None,
                  conflict_resolver: Optional[Any] = None):
@@ -102,6 +103,7 @@ class UniversalSyncOrchestrator:
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
+            strict: If True, raise ValueError when lossy conversions are detected before any writes
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
             logger: Callback for logging output (default: print)
             conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
@@ -117,6 +119,7 @@ class UniversalSyncOrchestrator:
         self.dry_run = dry_run
         self.force = force
         self.verbose = verbose
+        self.strict = strict
         self.conversion_options = conversion_options or {}
         self.logger = logger or print
         self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver
@@ -167,6 +170,9 @@ class UniversalSyncOrchestrator:
             'skipped': 0,
             'errors': 0
         }
+
+        # Run-level warning accumulator (for --strict enforcement)
+        self._accumulated_warnings: List[str] = []
 
     def sync(self):
         """
@@ -488,13 +494,15 @@ class UniversalSyncOrchestrator:
                     # In dry-run, use existing mtime or current time for new files
                     target_mtime = pair.target_mtime or datetime.now().timestamp()
 
-                # Log conversion warnings
+                # Log conversion warnings and accumulate them for run-level tracking
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self._accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self._accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
@@ -543,13 +551,15 @@ class UniversalSyncOrchestrator:
                     # In dry-run, use existing mtime or current time for new files
                     source_mtime = pair.source_mtime or datetime.now().timestamp()
 
-                # Log conversion warnings
+                # Log conversion warnings and accumulate them for run-level tracking
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self._accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    self._accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
 
                 # Update state (unless dry run)
@@ -601,6 +611,15 @@ class UniversalSyncOrchestrator:
         if self.verbose:
             self.logger(message)
 
+    def get_all_warnings(self) -> List[str]:
+        """
+        Get all warnings accumulated during the sync run.
+
+        Returns:
+            List of warning messages from all conversions
+        """
+        return self._accumulated_warnings.copy()
+
     def _print_summary(self):
         """Print sync statistics summary."""
         self.logger()
@@ -651,6 +670,10 @@ class UniversalSyncOrchestrator:
         into target (rather than replacing the entire target file). Optionally, changes
         from target can be merged back into source.
 
+        When strict mode is enabled (self.strict=True), all conversions are performed
+        first to detect warnings, and if any warnings are found, a ValueError is raised
+        BEFORE any files are modified.
+
         Args:
             source_path: Path to source config file
             target_path: Path to target config file
@@ -666,6 +689,8 @@ class UniversalSyncOrchestrator:
             self.log(f"  Direction: {self.source_format} -> {self.target_format}")
         if dry_run:
             self.log("  Mode: DRY RUN (no changes will be made)")
+        if self.strict:
+            self.log("  Mode: STRICT (will fail on lossy conversions)")
         self.log("")  # Blank line for readability
 
         try:
@@ -675,7 +700,10 @@ class UniversalSyncOrchestrator:
             if not target_path.exists():
                 raise IOError(f"Target file not found: {target_path}")
 
-            # 1. Read target content for comparison
+            # Phase 1: Read and convert (gather warnings before any writes)
+
+            # 1. Read both files
+            source_content = source_path.read_text(encoding='utf-8')
             target_content = target_path.read_text(encoding='utf-8')
 
             # 2. Convert both to canonical
@@ -689,13 +717,51 @@ class UniversalSyncOrchestrator:
                 config_type=self.config_type
             )
 
-            # 4. Convert merged result back to target format
+            # 4. Convert merged result back to target format (this may generate warnings)
             merged_content = self.target_adapter.from_canonical(
                 merged_canonical, self.config_type,
                 self.conversion_options
             )
 
-            # 5. Write target (unless dry run or no changes)
+            # Accumulate warnings from target conversion
+            for warning in self.target_adapter.get_warnings():
+                self.log(f"  Warning: {warning}")
+                self._accumulated_warnings.append(warning)
+            self.target_adapter.clear_conversion_warnings()
+
+            # 5. If bidirectional, also prepare source conversion (gather all warnings first)
+            source_merged_content = None
+            if bidirectional:
+                # Merge target into source
+                source_merged_canonical = self._merge_canonical(
+                    source=merged_canonical,  # Use the already-merged canonical
+                    target=source_canonical,
+                    config_type=self.config_type
+                )
+
+                # Convert back to source format (this may generate warnings)
+                source_merged_content = self.source_adapter.from_canonical(
+                    source_merged_canonical, self.config_type,
+                    self.conversion_options
+                )
+
+                # Accumulate warnings from source conversion
+                for warning in self.source_adapter.get_warnings():
+                    self.log(f"  Warning: {warning}")
+                    self._accumulated_warnings.append(warning)
+                self.source_adapter.clear_conversion_warnings()
+
+            # Phase 2: Check strict mode BEFORE any writes
+            if self.strict and self._accumulated_warnings:
+                error_msg = "Lossy conversions detected with --strict flag. No files were modified."
+                self.logger(f"\nError: {error_msg}")
+                for warning in self._accumulated_warnings:
+                    self.logger(f"  - {warning}")
+                raise ValueError("Lossy conversions detected with --strict flag")
+
+            # Phase 3: Write files (only reached if not strict or no warnings)
+
+            # Write target (unless dry run or no changes)
             target_changed = merged_content != target_content
             if not dry_run:
                 if target_changed:
@@ -711,27 +777,8 @@ class UniversalSyncOrchestrator:
                 else:
                     self.logger(f"No changes needed for {self.target_format}: {target_path}")
 
-            # 6. If bidirectional, merge target changes back into source
-            if bidirectional:
-                # Read source content for comparison
-                source_content = source_path.read_text(encoding='utf-8')
-                
-                merged_target_canonical = self.target_adapter.read(target_path, self.config_type) if not dry_run else merged_canonical
-
-                # Merge target into source
-                source_merged_canonical = self._merge_canonical(
-                    source=merged_target_canonical,
-                    target=source_canonical,
-                    config_type=self.config_type
-                )
-
-                # Convert back to source format
-                source_merged_content = self.source_adapter.from_canonical(
-                    source_merged_canonical, self.config_type,
-                    self.conversion_options
-                )
-
-                # Write source (unless dry run or no changes)
+            # Write source if bidirectional (unless dry run or no changes)
+            if bidirectional and source_merged_content is not None:
                 source_changed = source_merged_content != source_content
                 if not dry_run:
                     if source_changed:
@@ -750,8 +797,9 @@ class UniversalSyncOrchestrator:
             self._print_summary()
 
         except (IOError, ValueError, RuntimeError) as e:
-            self.logger(f"Error syncing files: {e}")
-            self.stats['errors'] += 1
+            if "Lossy conversions detected" not in str(e):
+                self.logger(f"Error syncing files: {e}")
+                self.stats['errors'] += 1
             raise
         except Exception as e:
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
