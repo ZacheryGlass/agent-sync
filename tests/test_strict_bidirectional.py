@@ -7,7 +7,6 @@ when lossy conversions are detected in either direction during bidirectional syn
 
 import json
 import pytest
-from unittest.mock import MagicMock, patch
 
 from core.orchestrator import UniversalSyncOrchestrator
 from core.registry import FormatRegistry
