@@ -791,18 +791,21 @@ class UniversalSyncOrchestrator:
                 )
                 
                 # Check for warnings and accumulate for strict mode
+                file_warnings: List[str] = []
                 for warning in self.source_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    file_warnings.append(warning)
                     self.accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
                 
                 for warning in self.target_adapter.get_warnings():
                     self.log(f"  Warning: {warning}")
+                    file_warnings.append(warning)
                     self.accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
                 
                 # Check strict mode - fail if lossy conversions detected
-                if self.strict and self.accumulated_warnings:
+                if self.strict and file_warnings:
                     raise RuntimeError(f"Lossy conversions detected with --strict flag. "
                                      f"See warnings above for details.")
 
