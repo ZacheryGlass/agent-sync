@@ -746,7 +746,7 @@ class UniversalSyncOrchestrator:
             all_warnings = forward_warnings + backward_warnings
             if self.strict and all_warnings:
                 self.logger("")
-                self.logger("Error: Lossy conversions detected in strict mode")
+                self.logger("Error: Lossy conversions detected with --strict flag")
                 if bidirectional:
                     self.logger("No files were modified (bidirectional sync aborted)")
                 else:
