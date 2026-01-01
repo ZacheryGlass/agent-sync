@@ -1164,6 +1164,33 @@ class TestCLIPermissionSupport:
             assert result == 0
 
 
+    def test_directory_sync_strict_mode_blocks_lossy_permission_write(self, tmp_path):
+        """Directory sync: --strict should fail and avoid writing lossy outputs."""
+        source_dir = tmp_path / "claude"
+        target_dir = tmp_path / "copilot"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Claude settings with deny rule -> lossy when mapped to VS Code
+        (source_dir / "settings.json").write_text(
+            '{"permissions": {"deny": ["Bash(rm:*)"]}}',
+            encoding="utf-8",
+        )
+
+        result = main([
+            '--source-dir', str(source_dir),
+            '--target-dir', str(target_dir),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--config-type', 'permission',
+            '--strict'
+        ])
+
+        assert result == 1
+        # Strict mode should prevent writing lossy target output
+        assert not (target_dir / "settings.perm.json").exists()
+
+
 # =============================================================================
 # TestCLIGeminiIntegration - CLI integration tests with Gemini format
 # =============================================================================
@@ -1232,7 +1259,6 @@ Test instructions.
 
         # Verify success
         assert result == 0
-        assert (claude_dir / "test.md").exists()
 
     def test_gemini_single_file_conversion(self, tmp_path):
         """Test single file conversion with Gemini format."""

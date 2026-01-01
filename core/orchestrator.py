@@ -124,6 +124,11 @@ class UniversalSyncOrchestrator:
         self.logger = logger or print
         self.conflict_resolver = conflict_resolver or self._default_cli_conflict_resolver
 
+        # Accumulates conversion warnings across the run. Adapters may reset their
+        # internal warning lists between operations, so the orchestrator captures
+        # them at the correct times.
+        self.conversion_warnings: List[str] = []
+
         # Get adapters from registry
         self.source_adapter = format_registry.get_adapter(source_format)
         self.target_adapter = format_registry.get_adapter(target_format)
@@ -476,23 +481,8 @@ class UniversalSyncOrchestrator:
                     target_extension = self.target_adapter.get_file_extension(self.config_type)
                     target_path = self.target_dir / f"{pair.base_name}{target_extension}"
 
-                # Write to target (unless dry run)
-                if not self.dry_run:
-                    try:
-                        target_path.parent.mkdir(parents=True, exist_ok=True)
-                    except Exception as e:
-                        raise IOError(f"Failed to create directory {target_path.parent}: {e}")
-
-                    self.target_adapter.write(canonical, target_path, self.config_type,
-                                              self.conversion_options)
-                    
-                    if not target_path.exists():
-                        raise IOError(f"Adapter write failed: file not found at {target_path}")
-
-                    target_mtime = target_path.stat().st_mtime
-                else:
-                    # In dry-run, use existing mtime or current time for new files
-                    target_mtime = pair.target_mtime or datetime.now().timestamp()
+                # Convert to target format (surfaces warnings)
+                target_content = self.target_adapter.from_canonical(canonical, self.config_type, self.conversion_options)
 
                 # Log conversion warnings and accumulate them for run-level tracking
                 for warning in self.source_adapter.get_warnings():
@@ -500,10 +490,23 @@ class UniversalSyncOrchestrator:
                     self._accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
 
-                for warning in self.target_adapter.get_warnings():
+                target_warnings = self.target_adapter.get_warnings()
+                for warning in target_warnings:
                     self.log(f"  Warning: {warning}")
                     self._accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
+
+                # In strict mode, abort if there are lossy conversion warnings
+                if self.strict and target_warnings:
+                    raise RuntimeError(f"Lossy conversion for {pair.base_name}")
+
+                # Write to target (unless dry run)
+                if self.dry_run:
+                    target_mtime = pair.target_mtime or datetime.now().timestamp()
+                else:
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    target_path.write_text(target_content, encoding='utf-8')
+                    target_mtime = target_path.stat().st_mtime
 
                 # Update state (unless dry run)
                 if not self.dry_run:
@@ -533,26 +536,12 @@ class UniversalSyncOrchestrator:
                     source_extension = self.source_adapter.get_file_extension(self.config_type)
                     source_path = self.source_dir / f"{pair.base_name}{source_extension}"
 
-                # Write to source (unless dry run)
-                if not self.dry_run:
-                    try:
-                        source_path.parent.mkdir(parents=True, exist_ok=True)
-                    except Exception as e:
-                        raise IOError(f"Failed to create directory {source_path.parent}: {e}")
-
-                    self.source_adapter.write(canonical, source_path, self.config_type,
-                                              self.conversion_options)
-                    
-                    if not source_path.exists():
-                        raise IOError(f"Adapter write failed: file not found at {source_path}")
-
-                    source_mtime = source_path.stat().st_mtime
-                else:
-                    # In dry-run, use existing mtime or current time for new files
-                    source_mtime = pair.source_mtime or datetime.now().timestamp()
+                # Convert to source format (surfaces warnings)
+                source_content = self.source_adapter.from_canonical(canonical, self.config_type, self.conversion_options)
 
                 # Log conversion warnings and accumulate them for run-level tracking
-                for warning in self.source_adapter.get_warnings():
+                source_warnings = self.source_adapter.get_warnings()
+                for warning in source_warnings:
                     self.log(f"  Warning: {warning}")
                     self._accumulated_warnings.append(warning)
                 self.source_adapter.clear_conversion_warnings()
@@ -561,6 +550,18 @@ class UniversalSyncOrchestrator:
                     self.log(f"  Warning: {warning}")
                     self._accumulated_warnings.append(warning)
                 self.target_adapter.clear_conversion_warnings()
+
+                # In strict mode, abort if there are lossy conversion warnings
+                if self.strict and source_warnings:
+                    raise RuntimeError(f"Lossy conversion for {pair.base_name}")
+
+                # Write to source (unless dry run)
+                if self.dry_run:
+                    source_mtime = pair.source_mtime or datetime.now().timestamp()
+                else:
+                    source_path.parent.mkdir(parents=True, exist_ok=True)
+                    source_path.write_text(source_content, encoding='utf-8')
+                    source_mtime = source_path.stat().st_mtime
 
                 # Update state (unless dry run)
                 if not self.dry_run:
@@ -708,7 +709,18 @@ class UniversalSyncOrchestrator:
 
             # 2. Convert both to canonical
             source_canonical = self.source_adapter.read(source_path, self.config_type)
+            # Capture warnings from reading source
+            for warning in self.source_adapter.get_warnings():
+                self.log(f"  Warning: {warning}")
+                self._accumulated_warnings.append(warning)
+            self.source_adapter.clear_conversion_warnings()
+
             target_canonical = self.target_adapter.read(target_path, self.config_type)
+            # Capture warnings from reading target
+            for warning in self.target_adapter.get_warnings():
+                self.log(f"  Warning: {warning}")
+                self._accumulated_warnings.append(warning)
+            self.target_adapter.clear_conversion_warnings()
 
             # 3. Merge source into target
             merged_canonical = self._merge_canonical(

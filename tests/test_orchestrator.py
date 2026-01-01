@@ -1600,6 +1600,7 @@ class MockPermissionAdapter(FormatAdapter):
         self._supports_perm = supports_perm
         self.read_calls = []
         self.write_calls = []
+        self.from_canonical_calls = []
 
     @property
     def format_name(self) -> str:
@@ -1634,6 +1635,7 @@ class MockPermissionAdapter(FormatAdapter):
         return CanonicalPermission()
 
     def from_canonical(self, canonical_obj, config_type, options=None):
+        self.from_canonical_calls.append((canonical_obj, config_type, options))
         return "permission content"
 
 class TestPermissionSync:
@@ -1713,10 +1715,11 @@ class TestPermissionSync:
 
         assert len(source_adapter.read_calls) == 1
         assert source_adapter.read_calls[0][1] == ConfigType.PERMISSION
-        
-        assert len(target_adapter.write_calls) == 1
-        assert target_adapter.write_calls[0][2] == ConfigType.PERMISSION
-        assert isinstance(target_adapter.write_calls[0][0], CanonicalPermission)
+
+        # Orchestrator now calls from_canonical() directly instead of write()
+        assert len(target_adapter.from_canonical_calls) == 1
+        assert target_adapter.from_canonical_calls[0][1] == ConfigType.PERMISSION
+        assert isinstance(target_adapter.from_canonical_calls[0][0], CanonicalPermission)
 
     def test_permission_conflict_handling(self, registry, state_manager, tmp_path):
         """Test permission conflict resolution."""

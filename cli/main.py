@@ -493,7 +493,6 @@ def main(argv: Optional[list] = None):
 
             # Check for conversion warnings with --strict
             all_warnings = orchestrator.get_all_warnings()
-
             if all_warnings and args.strict:
                 print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
                 print("See warnings above for details.", file=sys.stderr)
@@ -590,7 +589,6 @@ def main(argv: Optional[list] = None):
 
         # 8. Check for conversion warnings with --strict
         all_warnings = orchestrator.get_all_warnings()
-
         if all_warnings and args.strict:
             print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
             print("See warnings above for details.", file=sys.stderr)
