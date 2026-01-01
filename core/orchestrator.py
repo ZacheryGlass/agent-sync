@@ -780,7 +780,7 @@ class UniversalSyncOrchestrator:
                     self.logger(f"No changes needed for {self.target_format}: {target_path}")
 
             # Backward direction: Write source (if bidirectional)
-            if bidirectional and source_merged_content:
+            if bidirectional and source_merged_content is not None:
                 source_changed = source_merged_content != source_content
                 if not dry_run:
                     if source_changed:
