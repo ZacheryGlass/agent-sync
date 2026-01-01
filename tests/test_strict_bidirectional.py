@@ -137,7 +137,6 @@ class TestStrictBidirectionalSync:
         )
 
         # Save original content
-        original_source = source_file.read_text()
         original_target = target_file.read_text()
 
         # This test scenario requires a more precise backward-direction warning setup.
