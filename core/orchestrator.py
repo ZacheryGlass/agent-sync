@@ -103,7 +103,7 @@ class UniversalSyncOrchestrator:
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
             verbose: If True, print detailed logs
-            strict: If True, fail on first lossy conversion (pre-write)
+            strict: Reserved for future use. Currently unused; strict enforcement is handled by the CLI after sync completes.
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
             logger: Callback for logging output (default: print)
             conflict_resolver: Callback for resolving conflicts (default: CLI interactive)
