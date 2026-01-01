@@ -11,7 +11,7 @@ import pytest
 from core.orchestrator import UniversalSyncOrchestrator
 from core.registry import FormatRegistry
 from core.state_manager import SyncStateManager
-from core.canonical_models import ConfigType, CanonicalPermission
+from core.canonical_models import ConfigType
 from adapters import ClaudeAdapter, CopilotAdapter
 
 
