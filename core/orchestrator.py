@@ -751,7 +751,16 @@ class UniversalSyncOrchestrator:
                     self.logger("No files were modified (bidirectional sync aborted)")
                 else:
                     self.logger("No files were modified (sync aborted)")
-                raise ValueError("Lossy conversions detected with --strict flag")
+                # Ensure warnings do not accumulate when strict mode aborts the sync
+                try:
+                    clear_source_warnings = getattr(self.source_adapter, "clear_warnings", None)
+                    if callable(clear_source_warnings):
+                        clear_source_warnings()
+                    clear_target_warnings = getattr(self.target_adapter, "clear_warnings", None)
+                    if callable(clear_target_warnings):
+                        clear_target_warnings()
+                finally:
+                    raise ValueError("Lossy conversions detected with --strict flag")
 
             # === WRITE FILES ===
             # Forward direction: Write target
