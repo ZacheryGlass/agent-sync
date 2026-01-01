@@ -721,18 +721,16 @@ class UniversalSyncOrchestrator:
             source_warnings_1 = self.source_adapter.get_warnings()
             target_warnings_1 = self.target_adapter.get_warnings()
             all_warnings_1 = source_warnings_1 + target_warnings_1
-            
+
             for warning in all_warnings_1:
                 self.logger(f"Warning: {warning}")
-            
-            if self.strict and all_warnings_1:
-                self.source_adapter.clear_conversion_warnings()
-                self.target_adapter.clear_conversion_warnings()
-                raise RuntimeError(f"Lossy conversion detected in strict mode")
-            
+
+            # Always clear warnings after logging, regardless of strictness
             self.source_adapter.clear_conversion_warnings()
             self.target_adapter.clear_conversion_warnings()
 
+            if self.strict and all_warnings_1:
+                raise RuntimeError(f"Lossy conversion detected in strict mode")
             # 5. Write target (unless dry run or no changes)
             target_changed = merged_content != target_content
             if not dry_run:
