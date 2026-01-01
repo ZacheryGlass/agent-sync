@@ -2498,7 +2498,6 @@ class TestOrchestratorStrictMode:
 
     def test_strict_mode_fails_on_warnings_directory_sync(self, registry, state_manager, tmp_path):
         """Test that strict mode causes orchestrator to raise exception when warnings occur during directory sync."""
-        from unittest.mock import MagicMock
         
         source_dir = tmp_path / "source"
         target_dir = tmp_path / "target"
