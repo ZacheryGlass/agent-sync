@@ -233,10 +233,14 @@ python -m cli.main \
 ```
 
 When `--strict` is enabled:
-- Lossy conversions trigger an error (exit code 1) **before any files are modified**
-- In bidirectional mode, both directions are checked for warnings before any writes occur
-- If either direction produces warnings, the entire operation fails and no files are modified
-- Warnings are displayed showing which rules were affected
+- **With `--sync-file` (in-place sync):**
+  - Lossy conversions trigger an error (exit code 1) **before any files are modified**
+  - In bidirectional mode, both directions are checked for warnings before any writes occur
+  - If either direction produces warnings, the entire operation fails and no files are modified
+- **With directory sync (`--source-dir` / `--target-dir`):**
+  - Lossy conversions still trigger an error (exit code 1), but validation happens after files are written
+  - If warnings or lossy conversions are detected, remaining writes are aborted, but previously written files are not rolled back
+- In all cases, warnings are displayed showing which rules were affected
 - Useful for ensuring no security rules are silently downgraded
 - Recommended for production permission sync workflows
 
