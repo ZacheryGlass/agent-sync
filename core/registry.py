@@ -16,6 +16,14 @@ from .adapter_interface import FormatAdapter
 from .canonical_models import ConfigType
 
 
+# Subdirectory mapping for different config types
+_CONFIG_TYPE_SUBDIRS = {
+    ConfigType.AGENT: "agents",
+    ConfigType.SLASH_COMMAND: "commands",
+    ConfigType.PERMISSION: None,  # root level
+}
+
+
 class FormatRegistry:
     """
     Central registry for all format adapters.
@@ -193,3 +201,52 @@ class FormatRegistry:
             for format_name, adapter in self._adapters.items()
             if config_type in adapter.supported_config_types
         ]
+
+    def detect_config_types_in_directory(
+        self,
+        path: Path,
+        format_name: str
+    ) -> Dict[ConfigType, int]:
+        """
+        Scan directory and return detected config types with file counts.
+
+        Searches for files in subdirectories based on config type:
+        - AGENT: searches in agents/ subdirectory
+        - SLASH_COMMAND: searches in commands/ subdirectory
+        - PERMISSION: searches in root directory
+
+        Args:
+            path: Directory to scan
+            format_name: Format to use for detection (e.g., 'claude', 'copilot')
+
+        Returns:
+            Dict mapping ConfigType to count of matching files.
+            Only includes config types with count > 0.
+            Returns empty dict if format not found or no files match.
+
+        Example:
+            result = registry.detect_config_types_in_directory(Path('~/.claude'), 'claude')
+            # {ConfigType.AGENT: 5, ConfigType.SLASH_COMMAND: 12}
+        """
+        adapter = self.get_adapter(format_name)
+        if not adapter:
+            return {}
+
+        result = {}
+        path = Path(path)
+
+        for config_type in adapter.supported_config_types:
+            subdir = _CONFIG_TYPE_SUBDIRS.get(config_type)
+            search_path = path / subdir if subdir else path
+
+            if not search_path.exists():
+                continue
+
+            extension = adapter.get_file_extension(config_type)
+            pattern = f"*{extension}"
+            count = len(list(search_path.glob(pattern)))
+
+            if count > 0:
+                result[config_type] = count
+
+        return result

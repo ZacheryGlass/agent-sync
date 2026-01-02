@@ -212,3 +212,143 @@ class TestFormatRegistry:
         # Existing formats should still be there
         assert 'claude' in registry.list_formats()
         assert 'copilot' in registry.list_formats()
+
+
+class TestDetectConfigTypesInDirectory:
+    """Tests for detect_config_types_in_directory method."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create FormatRegistry with some adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    def test_empty_directory(self, registry, tmp_path):
+        """Test detection in empty directory returns empty dict."""
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+        assert result == {}
+
+    def test_nonexistent_format(self, registry, tmp_path):
+        """Test detection with non-existent format returns empty dict."""
+        result = registry.detect_config_types_in_directory(tmp_path, 'nonexistent')
+        assert result == {}
+
+    def test_nonexistent_directory(self, registry):
+        """Test detection in non-existent directory returns empty dict."""
+        result = registry.detect_config_types_in_directory(Path('/nonexistent/path'), 'claude')
+        assert result == {}
+
+    def test_detect_claude_agents_only(self, registry, tmp_path):
+        """Test detection when only Claude agent files exist."""
+        # Create agents subdirectory with agent files
+        agents_dir = tmp_path / 'agents'
+        agents_dir.mkdir()
+        (agents_dir / 'agent1.md').write_text('---\nname: a1\n---\n')
+        (agents_dir / 'agent2.md').write_text('---\nname: a2\n---\n')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+
+        assert ConfigType.AGENT in result
+        assert result[ConfigType.AGENT] == 2
+
+    def test_detect_claude_permissions_only(self, registry, tmp_path):
+        """Test detection when only permission file exists."""
+        (tmp_path / 'settings.json').write_text('{"permissions":{}}')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+
+        assert ConfigType.PERMISSION in result
+        assert result[ConfigType.PERMISSION] == 1
+
+    def test_detect_claude_slash_commands_only(self, registry, tmp_path):
+        """Test detection when only slash command files exist."""
+        commands_dir = tmp_path / 'commands'
+        commands_dir.mkdir()
+        (commands_dir / 'cmd1.md').write_text('---\nname: cmd1\n---\n')
+        (commands_dir / 'cmd2.md').write_text('---\nname: cmd2\n---\n')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+
+        assert ConfigType.SLASH_COMMAND in result
+        assert result[ConfigType.SLASH_COMMAND] == 2
+
+    def test_detect_claude_mixed_config_types(self, registry, tmp_path):
+        """Test detection with multiple config types present."""
+        # Create agents
+        agents_dir = tmp_path / 'agents'
+        agents_dir.mkdir()
+        (agents_dir / 'agent.md').write_text('---\nname: test\n---\n')
+
+        # Create permission
+        (tmp_path / 'settings.json').write_text('{}')
+
+        # Create commands
+        commands_dir = tmp_path / 'commands'
+        commands_dir.mkdir()
+        (commands_dir / 'cmd.md').write_text('---\nname: cmd\n---\n')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+
+        assert len(result) == 3
+        assert result[ConfigType.AGENT] == 1
+        assert result[ConfigType.PERMISSION] == 1
+        assert result[ConfigType.SLASH_COMMAND] == 1
+
+    def test_unknown_file_types_ignored(self, registry, tmp_path):
+        """Test that non-format files are ignored."""
+        (tmp_path / 'readme.txt').write_text('random text')
+        (tmp_path / 'script.py').write_text('print("hi")')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+
+        assert result == {}
+
+    def test_detect_copilot_agents(self, registry, tmp_path):
+        """Test detection of Copilot agent files."""
+        agents_dir = tmp_path / 'agents'
+        agents_dir.mkdir()
+        (agents_dir / 'agent1.agent.md').write_text('---\nname: a1\n---\n')
+        (agents_dir / 'agent2.agent.md').write_text('---\nname: a2\n---\n')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'copilot')
+
+        assert ConfigType.AGENT in result
+        assert result[ConfigType.AGENT] == 2
+
+    def test_detect_copilot_permissions(self, registry, tmp_path):
+        """Test detection of Copilot permission files."""
+        (tmp_path / 'settings.perm.json').write_text('{}')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'copilot')
+
+        assert ConfigType.PERMISSION in result
+        assert result[ConfigType.PERMISSION] == 1
+
+    def test_detect_copilot_prompts(self, registry, tmp_path):
+        """Test detection of Copilot prompt files."""
+        prompts_dir = tmp_path / 'commands'
+        prompts_dir.mkdir()
+        (prompts_dir / 'cmd1.prompt.md').write_text('---\nname: cmd1\n---\n')
+        (prompts_dir / 'cmd2.prompt.md').write_text('---\nname: cmd2\n---\n')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'copilot')
+
+        assert ConfigType.SLASH_COMMAND in result
+        assert result[ConfigType.SLASH_COMMAND] == 2
+
+    def test_only_nonzero_counts_included(self, registry, tmp_path):
+        """Test that only config types with matches are included in result."""
+        # Create only agents
+        agents_dir = tmp_path / 'agents'
+        agents_dir.mkdir()
+        (agents_dir / 'agent.md').write_text('---\nname: test\n---\n')
+
+        result = registry.detect_config_types_in_directory(tmp_path, 'claude')
+
+        # Should only contain AGENT, not PERMISSION or SLASH_COMMAND
+        assert len(result) == 1
+        assert ConfigType.AGENT in result
+        assert ConfigType.PERMISSION not in result
+        assert ConfigType.SLASH_COMMAND not in result
