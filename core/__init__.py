@@ -17,6 +17,7 @@ from .adapter_interface import FormatAdapter
 from .registry import FormatRegistry
 from .orchestrator import UniversalSyncOrchestrator
 from .state_manager import SyncStateManager
+from .profile_paths import ProfilePathResolver
 
 __all__ = [
     'CanonicalAgent',
@@ -27,4 +28,5 @@ __all__ = [
     'FormatRegistry',
     'UniversalSyncOrchestrator',
     'SyncStateManager',
+    'ProfilePathResolver',
 ]
