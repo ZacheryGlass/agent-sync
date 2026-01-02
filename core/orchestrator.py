@@ -83,6 +83,7 @@ class UniversalSyncOrchestrator:
                  direction: str = 'both',
                  dry_run: bool = False,
                  force: bool = False,
+                 auto_confirm: bool = False,
                  verbose: bool = False,
                  strict: bool = False,
                  conversion_options: Optional[Dict[str, Any]] = None,
@@ -102,6 +103,7 @@ class UniversalSyncOrchestrator:
             direction: 'both', 'source-to-target', or 'target-to-source'
             dry_run: If True, don't actually modify files
             force: If True, auto-resolve conflicts using newest file
+            auto_confirm: If True, skip confirmation prompts (same behavior as force)
             verbose: If True, print detailed logs
             strict: If True, raise ValueError when lossy conversions are detected before any writes
             conversion_options: Options to pass to adapters (e.g., add_argument_hint)
@@ -118,6 +120,7 @@ class UniversalSyncOrchestrator:
         self.direction = direction
         self.dry_run = dry_run
         self.force = force
+        self.auto_confirm = auto_confirm
         self.verbose = verbose
         self.strict = strict
         self.conversion_options = conversion_options or {}
@@ -439,17 +442,19 @@ class UniversalSyncOrchestrator:
         Returns:
             Resolved action or None to skip
         """
-        if self.force:
+        if self.force or self.auto_confirm:
             # Handle None mtimes (treat as 0/oldest)
             source_mtime = pair.source_mtime or 0
             target_mtime = pair.target_mtime or 0
 
             # Use newest file
             if source_mtime > target_mtime:
-                self.log(f"  Conflict resolved (--force): Using source (newer)")
+                flag_name = "--force" if self.force else "--yes"
+                self.log(f"  Conflict resolved ({flag_name}): Using source (newer)")
                 return 'source_to_target'
             else:
-                self.log(f"  Conflict resolved (--force): Using target (newer)")
+                flag_name = "--force" if self.force else "--yes"
+                self.log(f"  Conflict resolved ({flag_name}): Using target (newer)")
                 return 'target_to_source'
 
         return self.conflict_resolver(pair)

@@ -1446,3 +1446,146 @@ Create a git commit.
         assert (copilot_dir / "commit.prompt.md").exists()
         content = (copilot_dir / "commit.prompt.md").read_text()
         assert "Create commit" in content
+
+
+class TestOnlyFlag:
+    """Tests for --only flag functionality."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create argument parser instance."""
+        return create_parser()
+
+    @pytest.fixture
+    def valid_dirs(self, tmp_path):
+        """Create valid source and target directories."""
+        source = tmp_path / "source"
+        source.mkdir()
+        target = tmp_path / "target"
+        target.mkdir()
+        return source, target
+
+    @pytest.fixture
+    def base_args(self, valid_dirs):
+        """Minimum valid arguments for CLI."""
+        source, target = valid_dirs
+        return [
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ]
+
+    def test_only_flag_parsing(self, parser, base_args):
+        """Test --only flag is parsed correctly."""
+        args = parser.parse_args(base_args + ['--only', 'agents'])
+        assert args.only == 'agents'
+
+    def test_only_flag_multiple_types(self, parser, base_args):
+        """Test --only accepts comma-separated types."""
+        args = parser.parse_args(base_args + ['--only', 'agents,commands'])
+        assert args.only == 'agents,commands'
+
+    def test_only_validation_valid_types(self, base_args):
+        """Test --only validates known type names."""
+        # Should succeed with valid types
+        result = main(base_args + ['--only', 'agents'])
+        # With empty dirs, should succeed (no files to sync)
+        assert result == 0
+
+    def test_only_validation_invalid_type(self, base_args, capsys):
+        """Test --only rejects unknown type names."""
+        result = main(base_args + ['--only', 'invalid-type'])
+        assert result != 0
+        captured = capsys.readouterr()
+        assert 'invalid' in captured.err.lower()
+
+    def test_only_takes_precedence_over_config_type(self, base_args, capsys):
+        """Test --only takes precedence with warning when both specified."""
+        result = main(base_args + ['--only', 'commands', '--config-type', 'permission'])
+        captured = capsys.readouterr()
+        assert 'warning' in captured.err.lower()
+        assert 'precedence' in captured.err.lower()
+
+    def test_only_accepts_singular_forms(self, parser, base_args):
+        """Test --only accepts singular form (agent vs agents)."""
+        args = parser.parse_args(base_args + ['--only', 'agent,command,permission'])
+        assert args.only == 'agent,command,permission'
+
+    def test_only_with_spaces(self, base_args):
+        """Test --only handles spaces around commas."""
+        result = main(base_args + ['--only', 'agents, commands'])
+        assert result == 0
+
+    def test_only_empty_value(self, base_args, capsys):
+        """Test --only with empty value produces error."""
+        result = main(base_args + ['--only', ''])
+        assert result != 0
+
+
+class TestYesFlag:
+    """Tests for --yes / -y flag functionality."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create argument parser instance."""
+        return create_parser()
+
+    @pytest.fixture
+    def valid_dirs(self, tmp_path):
+        """Create valid source and target directories."""
+        source = tmp_path / "source"
+        source.mkdir()
+        target = tmp_path / "target"
+        target.mkdir()
+        return source, target
+
+    @pytest.fixture
+    def base_args(self, valid_dirs):
+        """Minimum valid arguments for CLI."""
+        source, target = valid_dirs
+        return [
+            '--source-dir', str(source),
+            '--target-dir', str(target),
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ]
+
+    def test_yes_flag_parsing(self, parser, base_args):
+        """Test --yes flag is parsed correctly."""
+        args = parser.parse_args(base_args + ['--yes'])
+        assert args.yes is True
+
+    def test_yes_short_flag_parsing(self, parser, base_args):
+        """Test -y short flag is parsed correctly."""
+        args = parser.parse_args(base_args + ['-y'])
+        assert args.yes is True
+
+    def test_yes_flag_default_false(self, parser, base_args):
+        """Test --yes defaults to False."""
+        args = parser.parse_args(base_args)
+        assert args.yes is False
+
+    def test_yes_passed_to_orchestrator(self, base_args):
+        """Test --yes is passed to orchestrator as auto_confirm."""
+        with patch('cli.main.UniversalSyncOrchestrator') as mock_orch:
+            mock_instance = MagicMock()
+            mock_orch.return_value = mock_instance
+
+            main(base_args + ['--yes'])
+
+            # Verify orchestrator was called with auto_confirm=True
+            call_kwargs = mock_orch.call_args.kwargs
+            assert call_kwargs.get('auto_confirm') is True
+
+    def test_yes_skips_prompts(self, base_args):
+        """Test --yes does not prompt for input (doesn't hang on input())."""
+        # This test verifies that with --yes, the sync completes without
+        # calling input() which would hang in non-interactive mode
+        result = main(base_args + ['--yes'])
+        assert result == 0
+
+    def test_only_and_yes_combined(self, base_args):
+        """Test --only and --yes work together."""
+        result = main(base_args + ['--only', 'agents,commands', '--yes'])
+        assert result == 0

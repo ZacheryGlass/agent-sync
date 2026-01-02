@@ -19,7 +19,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from core.registry import FormatRegistry
 from core.orchestrator import UniversalSyncOrchestrator
@@ -34,6 +34,18 @@ CONFIG_TYPE_MAP = {
     'agent': ConfigType.AGENT,
     'permission': ConfigType.PERMISSION,
     'slash-command': ConfigType.SLASH_COMMAND
+}
+
+# Mapping from --only shorthand values to ConfigType enum
+# Accepts both singular and plural forms for user convenience
+ONLY_TYPE_MAP = {
+    'agents': ConfigType.AGENT,
+    'agent': ConfigType.AGENT,
+    'commands': ConfigType.SLASH_COMMAND,
+    'command': ConfigType.SLASH_COMMAND,
+    'slash-command': ConfigType.SLASH_COMMAND,
+    'permissions': ConfigType.PERMISSION,
+    'permission': ConfigType.PERMISSION,
 }
 
 # Exit codes
@@ -60,6 +72,47 @@ def _build_conversion_options(args: argparse.Namespace) -> dict:
     if args.add_handoffs:
         options['add_handoffs'] = True
     return options
+
+
+def _parse_only_types(only_arg: str) -> List[ConfigType]:
+    """
+    Parse and validate the --only argument.
+
+    Args:
+        only_arg: Comma-separated list of config type names
+
+    Returns:
+        List of validated ConfigType enum values (deduplicated)
+
+    Raises:
+        ValueError: If any type name is invalid
+    """
+    if not only_arg:
+        return []
+
+    config_types = []
+    invalid_types = []
+
+    for type_name in only_arg.split(','):
+        type_name = type_name.strip().lower()
+        if not type_name:
+            continue
+
+        if type_name in ONLY_TYPE_MAP:
+            config_type = ONLY_TYPE_MAP[type_name]
+            if config_type not in config_types:
+                config_types.append(config_type)
+        else:
+            invalid_types.append(type_name)
+
+    if invalid_types:
+        valid_options = ['agents', 'commands', 'permissions']
+        raise ValueError(
+            f"Invalid config type(s): {', '.join(invalid_types)}. "
+            f"Valid options: {', '.join(valid_options)}"
+        )
+
+    return config_types
 
 
 def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.ArgumentParser:
@@ -109,6 +162,21 @@ Examples:
   %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
            --source-format claude --target-format copilot \
            --config-type agent --direction both --dry-run
+
+  # Sync only agents and commands (skip permissions)
+  %(prog)s --source-dir ~/.claude --target-dir .github \
+           --source-format claude --target-format copilot \
+           --only agents,commands
+
+  # Skip confirmation prompts (for CI/scripts)
+  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
+           --source-format claude --target-format copilot \
+           --yes
+
+  # Combine --only with --yes for automated multi-type sync
+  %(prog)s --source-dir ~/.claude --target-dir .github \
+           --source-format claude --target-format copilot \
+           --only agents,permissions --yes --dry-run
         """
     )
 
@@ -217,6 +285,19 @@ Examples:
         '--verbose', '-v',
         action='store_true',
         help='Verbose output with detailed logging'
+    )
+
+    parser.add_argument(
+        '--only',
+        type=str,
+        metavar='TYPES',
+        help='Filter to specific config types (comma-separated: agents,commands,permissions)'
+    )
+
+    parser.add_argument(
+        '--yes', '-y',
+        action='store_true',
+        help='Skip confirmation prompts (useful for scripts/CI)'
     )
 
     parser.add_argument(
@@ -478,6 +559,7 @@ def main(argv: Optional[list] = None):
                 direction='both',
                 dry_run=args.dry_run,
                 force=args.force,
+                auto_confirm=args.yes,
                 verbose=args.verbose,
                 strict=args.strict,
                 conversion_options=conversion_options
@@ -526,6 +608,26 @@ def main(argv: Optional[list] = None):
         print("Error: --target-format is required for directory sync", file=sys.stderr)
         return EXIT_ERROR
 
+    # Parse and validate --only if provided
+    only_config_types = None
+    if args.only is not None:
+        try:
+            only_config_types = _parse_only_types(args.only)
+            if not only_config_types:
+                print("Error: --only requires at least one valid config type", file=sys.stderr)
+                return EXIT_ERROR
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return EXIT_ERROR
+
+    # Warn if both --only and --config-type are specified
+    if args.only is not None and args.config_type != 'agent':  # 'agent' is the default
+        print(
+            f"Warning: Both --only and --config-type specified. "
+            f"--only takes precedence, ignoring --config-type '{args.config_type}'.",
+            file=sys.stderr
+        )
+
     try:
         # 1. Expand and validate paths
         source_dir = args.source_dir.expanduser().resolve()
@@ -554,8 +656,11 @@ def main(argv: Optional[list] = None):
                 print(f"Error: Target parent directory is not writable: {target_dir.parent}", file=sys.stderr)
                 return EXIT_ERROR
 
-        # 2. Convert config_type string to ConfigType enum
-        config_type = CONFIG_TYPE_MAP[args.config_type]
+        # 2. Determine effective config types to process
+        if only_config_types:
+            config_types_to_sync = only_config_types
+        else:
+            config_types_to_sync = [CONFIG_TYPE_MAP[args.config_type]]
 
         # 3. Setup registry
         registry = setup_registry()
@@ -567,28 +672,40 @@ def main(argv: Optional[list] = None):
         # 5. Build conversion options
         conversion_options = _build_conversion_options(args)
 
-        # 6. Create orchestrator
-        orchestrator = UniversalSyncOrchestrator(
-            source_dir=source_dir,
-            target_dir=target_dir,
-            source_format=args.source_format,
-            target_format=args.target_format,
-            config_type=config_type,
-            format_registry=registry,
-            state_manager=state_manager,
-            direction=args.direction,
-            dry_run=args.dry_run,
-            force=args.force,
-            verbose=args.verbose,
-            strict=args.strict,
-            conversion_options=conversion_options if conversion_options else None
-        )
+        # 6. Track overall results
+        total_errors = 0
+        all_warnings = []
 
-        # 7. Run sync
-        orchestrator.sync()
+        # 7. Process each config type
+        for config_type in config_types_to_sync:
+            if len(config_types_to_sync) > 1:
+                print(f"\n--- Syncing {config_type.value}s ---")
+
+            # Create orchestrator for this config type
+            orchestrator = UniversalSyncOrchestrator(
+                source_dir=source_dir,
+                target_dir=target_dir,
+                source_format=args.source_format,
+                target_format=args.target_format,
+                config_type=config_type,
+                format_registry=registry,
+                state_manager=state_manager,
+                direction=args.direction,
+                dry_run=args.dry_run,
+                force=args.force,
+                auto_confirm=args.yes,
+                verbose=args.verbose,
+                strict=args.strict,
+                conversion_options=conversion_options if conversion_options else None
+            )
+
+            # Run sync for this config type
+            orchestrator.sync()
+
+            # Accumulate warnings
+            all_warnings.extend(orchestrator.get_all_warnings())
 
         # 8. Check for conversion warnings with --strict
-        all_warnings = orchestrator.get_all_warnings()
         if all_warnings and args.strict:
             print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
             print("See warnings above for details.", file=sys.stderr)
