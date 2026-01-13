@@ -51,7 +51,7 @@ class TestProfilePathResolver:
         monkeypatch.setenv('APPDATA', 'C:\\Users\\TestUser\\AppData\\Roaming')
 
         path = resolver.get_copilot_profile_path()
-        # Normalize path comparison since we're testing on Linux with Windows path strings
+        # Normalize path comparison for cross-platform testing with Windows path strings
         expected = Path('C:\\Users\\TestUser\\AppData\\Roaming') / 'Code' / 'User'
         assert path == expected
 
