@@ -51,7 +51,9 @@ class TestProfilePathResolver:
         monkeypatch.setenv('APPDATA', 'C:\\Users\\TestUser\\AppData\\Roaming')
 
         path = resolver.get_copilot_profile_path()
-        assert path == Path('C:/Users/TestUser/AppData/Roaming/Code/User')
+        # Normalize path comparison since we're testing on Linux with Windows path strings
+        expected = Path('C:\\Users\\TestUser\\AppData\\Roaming') / 'Code' / 'User'
+        assert path == expected
 
     def test_get_copilot_profile_path_windows_no_appdata(self, resolver, monkeypatch):
         """Test Copilot profile path on Windows when APPDATA not set."""
