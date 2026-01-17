@@ -2979,8 +2979,8 @@ Instructions.
             logger=lambda msg="": output_lines.append(msg),
         )
 
-        # Target file should NOT exist
-        assert not (target_dir / "test.agent.md").exists()
+        # Target file should NOT exist in the agents subdirectory
+        assert not (target_dir / "agents" / "test.agent.md").exists()
 
     def test_sync_all_config_types_no_files(self, registry, state_manager, tmp_path):
         """Test behavior when no files are detected."""
