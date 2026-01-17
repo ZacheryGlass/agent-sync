@@ -2869,7 +2869,7 @@ Instructions.
         source_dir.mkdir()
         target_dir.mkdir()
 
-        # Create valid agent in agents/ subdirectory (matches _CONFIG_TYPE_SUBDIRS)
+        # Create valid agent in agents/ subdirectory (via adapter.get_config_subdir())
         agents_dir = source_dir / "agents"
         agents_dir.mkdir()
         (agents_dir / "good-agent.md").write_text("""---
@@ -2959,7 +2959,7 @@ Command instructions.
         source_dir.mkdir()
         target_dir.mkdir()
 
-        # Create agent in agents/ subdirectory (matches _CONFIG_TYPE_SUBDIRS)
+        # Create agent in agents/ subdirectory (via adapter.get_config_subdir())
         agents_dir = source_dir / "agents"
         agents_dir.mkdir()
         (agents_dir / "test.md").write_text("""---
