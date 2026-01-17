@@ -1126,6 +1126,8 @@ def sync_all_config_types(
 
             # Collect warnings
             warnings = orchestrator.get_all_warnings()
+            # TODO: Aggregate all_warnings for cross-config-type reporting
+            # (e.g., to return or log a combined summary of all warnings).
             all_warnings.extend(warnings)
 
             results[ct] = SyncResult(
