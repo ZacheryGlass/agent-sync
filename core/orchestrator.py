@@ -20,16 +20,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .canonical_models import ConfigType, CanonicalAgent, CanonicalPermission, CanonicalSlashCommand
-from .registry import FormatRegistry
+from .registry import FormatRegistry, _CONFIG_TYPE_SUBDIRS
 from .state_manager import SyncStateManager
-
-
-# Subdirectory mapping for different config types (matches registry.py)
-_CONFIG_TYPE_SUBDIRS = {
-    ConfigType.AGENT: "agents",
-    ConfigType.SLASH_COMMAND: "commands",
-    ConfigType.PERMISSION: None,  # root level
-}
 
 
 @dataclass
@@ -1024,14 +1016,16 @@ def sync_all_config_types(
     log = logger or print
 
     # 1. Determine which config types to sync
+    # Also cache source_counts if we do auto-detection to avoid re-scanning
+    source_counts = None
     if config_types is None:
         # Auto-detect from source directory
-        detected = format_registry.detect_config_types_in_directory(
+        source_counts = format_registry.detect_config_types_in_directory(
             source_dir, source_format
         )
         # Filter to types supported by both source and target
         config_types = [
-            ct for ct in detected.keys()
+            ct for ct in source_counts.keys()
             if format_registry.validate_conversion_support(
                 source_format, target_format, ct
             )
@@ -1042,10 +1036,11 @@ def sync_all_config_types(
         return {}
 
     # 2. Count files per config type for preview
-    # Do directory scans once, outside the loop
-    source_counts = format_registry.detect_config_types_in_directory(
-        source_dir, source_format
-    )
+    # Reuse source_counts if already computed during auto-detection
+    if source_counts is None:
+        source_counts = format_registry.detect_config_types_in_directory(
+            source_dir, source_format
+        )
     target_counts = format_registry.detect_config_types_in_directory(
         target_dir, target_format
     )
@@ -1086,11 +1081,12 @@ def sync_all_config_types(
 
     # 5. Sync each config type independently
     results: Dict[ConfigType, SyncResult] = {}
-    all_warnings: List[str] = []
 
     for ct in config_types:
+        # Use human-readable display name
+        display_name = ct.value.replace("_", " ") + "s"
         if verbose or len(config_types) > 1:
-            log(f"\n--- Syncing {ct.value}s ---")
+            log(f"\n--- Syncing {display_name} ---")
 
         try:
             # Determine actual source/target directories based on config type
@@ -1125,11 +1121,8 @@ def sync_all_config_types(
 
             orchestrator.sync()
 
-            # Collect warnings
+            # Collect warnings for this config type
             warnings = orchestrator.get_all_warnings()
-            # TODO: Aggregate all_warnings for cross-config-type reporting
-            # (e.g., to return or log a combined summary of all warnings).
-            all_warnings.extend(warnings)
 
             results[ct] = SyncResult(
                 config_type=ct,
@@ -1141,7 +1134,7 @@ def sync_all_config_types(
         except Exception as e:
             # Continue with other types even if one fails
             error_msg = str(e)
-            log(f"Error syncing {ct.value}s: {error_msg}")
+            log(f"Error syncing {display_name}: {error_msg}")
             results[ct] = SyncResult(
                 config_type=ct,
                 stats={
