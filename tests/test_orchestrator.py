@@ -2869,8 +2869,10 @@ Instructions.
         source_dir.mkdir()
         target_dir.mkdir()
 
-        # Create valid agent in source root (orchestrator syncs from root)
-        (source_dir / "good-agent.md").write_text("""---
+        # Create valid agent in agents/ subdirectory (matches _CONFIG_TYPE_SUBDIRS)
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "good-agent.md").write_text("""---
 name: good-agent
 description: Good agent
 ---
@@ -2957,8 +2959,10 @@ Command instructions.
         source_dir.mkdir()
         target_dir.mkdir()
 
-        # Create agent
-        (source_dir / "test.md").write_text("""---
+        # Create agent in agents/ subdirectory (matches _CONFIG_TYPE_SUBDIRS)
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "test.md").write_text("""---
 name: test
 description: Test
 ---
@@ -2966,7 +2970,7 @@ Instructions.
 """)
 
         output_lines = []
-        results = sync_all_config_types(
+        sync_all_config_types(
             source_dir=source_dir,
             target_dir=target_dir,
             source_format='claude',
