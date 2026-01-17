@@ -328,7 +328,7 @@ class TestDetectConfigTypesInDirectory:
 
     def test_detect_copilot_prompts(self, registry, tmp_path):
         """Test detection of Copilot prompt files."""
-        prompts_dir = tmp_path / 'commands'
+        prompts_dir = tmp_path / 'prompts'
         prompts_dir.mkdir()
         (prompts_dir / 'cmd1.prompt.md').write_text('---\nname: cmd1\n---\n')
         (prompts_dir / 'cmd2.prompt.md').write_text('---\nname: cmd2\n---\n')

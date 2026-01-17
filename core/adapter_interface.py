@@ -231,3 +231,28 @@ class FormatAdapter(ABC):
             List of validation error messages (empty if valid)
         """
         return []
+
+    def get_config_subdir(self, config_type: ConfigType) -> Optional[str]:
+        """
+        Get subdirectory name for a specific config type.
+
+        Returns the subdirectory where files of this config type are stored
+        relative to the format's profile directory.
+
+        Default mappings (can be overridden by subclasses):
+        - AGENT: "agents"
+        - SLASH_COMMAND: "commands"
+        - PERMISSION: None (root directory)
+
+        Args:
+            config_type: The type of configuration
+
+        Returns:
+            Subdirectory name, or None if files are in root directory
+        """
+        default_subdirs = {
+            ConfigType.AGENT: "agents",
+            ConfigType.SLASH_COMMAND: "commands",
+            ConfigType.PERMISSION: None,
+        }
+        return default_subdirs.get(config_type)

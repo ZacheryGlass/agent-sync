@@ -16,14 +16,6 @@ from .adapter_interface import FormatAdapter
 from .canonical_models import ConfigType
 
 
-# Subdirectory mapping for different config types
-_CONFIG_TYPE_SUBDIRS = {
-    ConfigType.AGENT: "agents",
-    ConfigType.SLASH_COMMAND: "commands",
-    ConfigType.PERMISSION: None,  # root level
-}
-
-
 class FormatRegistry:
     """
     Central registry for all format adapters.
@@ -210,10 +202,11 @@ class FormatRegistry:
         """
         Scan directory and return detected config types with file counts.
 
-        Searches for files in subdirectories based on config type:
-        - AGENT: searches in agents/ subdirectory
-        - SLASH_COMMAND: searches in commands/ subdirectory
-        - PERMISSION: searches in root directory
+        Searches for files in format-specific subdirectories. Each adapter defines
+        its own subdirectory mapping via get_config_subdir(). Common mappings:
+        - AGENT: agents/
+        - SLASH_COMMAND: commands/ (Claude/Gemini) or prompts/ (Copilot)
+        - PERMISSION: root directory
 
         Args:
             path: Directory to scan
@@ -236,7 +229,7 @@ class FormatRegistry:
         path = Path(path)
 
         for config_type in adapter.supported_config_types:
-            subdir = _CONFIG_TYPE_SUBDIRS.get(config_type)
+            subdir = adapter.get_config_subdir(config_type)
             search_path = path / subdir if subdir else path
 
             if not search_path.exists():

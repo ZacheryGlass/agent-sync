@@ -620,8 +620,9 @@ def main(argv: Optional[list] = None):
             print(f"Error: {e}", file=sys.stderr)
             return EXIT_ERROR
 
-    # Warn if both --only and --config-type are specified
-    if args.only is not None and args.config_type != 'agent':  # 'agent' is the default
+    # Warn if both --only and --config-type are explicitly specified
+    config_type_explicitly_set = '--config-type' in argv
+    if args.only is not None and config_type_explicitly_set:
         print(
             f"Warning: Both --only and --config-type specified. "
             f"--only takes precedence, ignoring --config-type '{args.config_type}'.",
@@ -672,8 +673,7 @@ def main(argv: Optional[list] = None):
         # 5. Build conversion options
         conversion_options = _build_conversion_options(args)
 
-        # 6. Track overall results
-        total_errors = 0
+        # 6. Track overall warnings
         all_warnings = []
 
         # 7. Process each config type
