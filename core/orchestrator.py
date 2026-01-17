@@ -997,7 +997,7 @@ def sync_all_config_types(
         dry_run: If True, don't actually modify files
         force: If True, auto-resolve conflicts using newest file
         verbose: If True, print detailed logs
-        strict: If True, raise ValueError when lossy conversions are detected
+        strict: If True, enables strict validation mode to flag lossy conversions as errors
         conversion_options: Options to pass to adapters
         logger: Callback for logging output (default: print)
 
