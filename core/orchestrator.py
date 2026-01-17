@@ -1188,11 +1188,11 @@ def _print_combined_summary(
             total_deletions += result.stats['deletions']
             total_conflicts += result.stats['conflicts']
             total_skipped += result.stats['skipped']
-            total_errors += result.stats['errors']
         else:
             failed_types.append(ct.value)
-            total_errors += 1
 
+        # Always aggregate error count from stats to avoid double-counting.
+        total_errors += result.stats.get('errors', 0)
     logger(f"  {source_format} -> {target_format}: {total_s2t}")
     logger(f"  {target_format} -> {source_format}: {total_t2s}")
     logger(f"  Deletions:  {total_deletions}")
