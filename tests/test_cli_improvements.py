@@ -178,7 +178,8 @@ class TestCLIImprovements:
                         '--source-dir', str(source_dir),
                         '--target-dir', str(target_dir),
                         '--source-format', 'claude',
-                        '--target-format', 'copilot'
+                        '--target-format', 'copilot',
+                        '--config-type', 'agent'  # Explicit config type to use single-type mode
                     ])
                 
                 output = f.getvalue()

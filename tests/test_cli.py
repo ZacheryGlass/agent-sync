@@ -106,9 +106,9 @@ class TestCLIArgumentParsing:
             assert args.target_format == fmt
 
     def test_config_type_default(self, parser, base_args):
-        """Test --config-type defaults to 'agent'."""
+        """Test --config-type defaults to None (auto-detect mode)."""
         args = parser.parse_args(base_args)
-        assert args.config_type == 'agent'
+        assert args.config_type is None
 
     def test_config_type_choices(self, parser, base_args):
         """Test --config-type accepts 'agent', 'permission', 'slash-command'."""
@@ -303,7 +303,8 @@ class TestErrorHandling:
                 '--source-dir', str(source),
                 '--target-dir', str(target),
                 '--source-format', 'claude',
-                '--target-format', 'copilot'
+                '--target-format', 'copilot',
+                '--config-type', 'agent'  # Explicit config type to use single-type mode
             ])
             # CLI should propagate orchestrator errors with non-zero exit
             assert result != 0
@@ -622,7 +623,7 @@ Instructions.
         # Record initial state of target directory
         initial_files = list(valid_target_dir.iterdir())
 
-        result = main(base_args + ['--dry-run'])
+        result = main(base_args + ['--dry-run', '--config-type', 'agent'])
 
         # Target directory should be unchanged
         final_files = list(valid_target_dir.iterdir())
@@ -630,11 +631,11 @@ Instructions.
 
     def test_dry_run_outputs_preview(self, base_args, capsys):
         """Dry-run outputs what would be done."""
-        main(base_args + ['--dry-run'])
+        main(base_args + ['--dry-run', '--config-type', 'agent'])
 
         captured = capsys.readouterr()
-        # Current stub outputs "Dry-run mode enabled"
-        assert 'dry-run' in captured.out.lower() or 'Dry-run' in captured.out
+        # Should output something related to dry-run mode
+        assert 'dry-run' in captured.out.lower() or 'Dry-run' in captured.out or 'DRY RUN' in captured.out
 
 
 class TestVerboseMode:
@@ -1572,7 +1573,7 @@ class TestYesFlag:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            main(base_args + ['--yes'])
+            main(base_args + ['--yes', '--config-type', 'agent'])
 
             # Verify orchestrator was called with auto_confirm=True
             call_kwargs = mock_orch.call_args.kwargs
@@ -1582,7 +1583,7 @@ class TestYesFlag:
         """Test --yes does not prompt for input (doesn't hang on input())."""
         # This test verifies that with --yes, the sync completes without
         # calling input() which would hang in non-interactive mode
-        result = main(base_args + ['--yes'])
+        result = main(base_args + ['--yes', '--config-type', 'agent'])
         assert result == 0
 
     def test_only_and_yes_combined(self, base_args):

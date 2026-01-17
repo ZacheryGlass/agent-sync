@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from core.registry import FormatRegistry
-from core.orchestrator import UniversalSyncOrchestrator
+from core.orchestrator import UniversalSyncOrchestrator, sync_all_config_types, SyncResult
 from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
 
@@ -250,9 +250,9 @@ Examples:
     parser.add_argument(
         '--config-type',
         type=str,
-        default='agent',
+        default=None,
         choices=['agent', 'permission', 'slash-command'],
-        help='Type of configuration to sync (default: agent)'
+        help='Type of configuration to sync. If omitted, auto-detects and syncs all available types.'
     )
 
     parser.add_argument(
@@ -372,8 +372,9 @@ def convert_single_file(args) -> int:
             print(f"Error: Cannot auto-detect format for: {source_file}", file=sys.stderr)
             return 1
 
-    # 3. Get config type
-    config_type = CONFIG_TYPE_MAP[args.config_type]
+    # 3. Get config type (default to 'agent' for single-file conversion)
+    config_type_str = args.config_type or 'agent'
+    config_type = CONFIG_TYPE_MAP[config_type_str]
 
     # 4. Determine target adapter (explicit or from output extension)
     if args.target_format:
@@ -534,8 +535,9 @@ def main(argv: Optional[list] = None):
                 print(f"Error: Target file does not exist: {target_file}", file=sys.stderr)
                 return EXIT_ERROR
 
-            # Get config type
-            config_type = CONFIG_TYPE_MAP[args.config_type]
+            # Get config type (default to 'agent' for in-place sync)
+            config_type_str = args.config_type or 'agent'
+            config_type = CONFIG_TYPE_MAP[config_type_str]
 
             # Setup registry
             registry = setup_registry()
@@ -621,7 +623,7 @@ def main(argv: Optional[list] = None):
             return EXIT_ERROR
 
     # Warn if both --only and --config-type are specified
-    if args.only is not None and args.config_type != 'agent':  # 'agent' is the default
+    if args.only is not None and args.config_type is not None:
         print(
             f"Warning: Both --only and --config-type specified. "
             f"--only takes precedence, ignoring --config-type '{args.config_type}'.",
@@ -656,27 +658,70 @@ def main(argv: Optional[list] = None):
                 print(f"Error: Target parent directory is not writable: {target_dir.parent}", file=sys.stderr)
                 return EXIT_ERROR
 
-        # 2. Determine effective config types to process
-        if only_config_types:
-            config_types_to_sync = only_config_types
-        else:
-            config_types_to_sync = [CONFIG_TYPE_MAP[args.config_type]]
-
-        # 3. Setup registry
+        # 2. Setup registry
         registry = setup_registry()
 
-        # 4. Create state manager
+        # 3. Create state manager
         state_file = args.state_file.expanduser().resolve() if args.state_file else None
         state_manager = SyncStateManager(state_file=state_file)
 
-        # 5. Build conversion options
+        # 4. Build conversion options
         conversion_options = _build_conversion_options(args)
 
-        # 6. Track overall results
-        total_errors = 0
+        # 5. Determine operating mode
+        # - If --only is provided, sync those specific types
+        # - If --config-type is provided, sync that single type
+        # - If neither is provided, auto-detect and sync all available types
+        use_multi_config_mode = (args.config_type is None and args.only is None)
+
+        if use_multi_config_mode:
+            # Multi-config mode: auto-detect and sync all available types
+            results = sync_all_config_types(
+                source_dir=source_dir,
+                target_dir=target_dir,
+                source_format=args.source_format,
+                target_format=args.target_format,
+                format_registry=registry,
+                state_manager=state_manager,
+                config_types=None,  # Auto-detect
+                skip_confirmation=args.yes or args.dry_run,
+                direction=args.direction,
+                dry_run=args.dry_run,
+                force=args.force,
+                verbose=args.verbose,
+                strict=args.strict,
+                conversion_options=conversion_options,
+            )
+
+            # Check for errors or strict mode violations
+            all_warnings = []
+            has_errors = False
+            for result in results.values():
+                all_warnings.extend(result.warnings)
+                if not result.success or result.stats.get('errors', 0) > 0:
+                    has_errors = True
+
+            if all_warnings and args.strict:
+                print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
+                print("See warnings above for details.", file=sys.stderr)
+                return EXIT_ERROR
+
+            if has_errors:
+                return EXIT_ERROR
+
+            return EXIT_SUCCESS
+
+        # Single-type or explicit --only mode
+        if only_config_types:
+            config_types_to_sync = only_config_types
+        else:
+            # args.config_type is provided
+            config_types_to_sync = [CONFIG_TYPE_MAP[args.config_type]]
+
+        # Track overall results
         all_warnings = []
 
-        # 7. Process each config type
+        # Process each config type
         for config_type in config_types_to_sync:
             if len(config_types_to_sync) > 1:
                 print(f"\n--- Syncing {config_type.value}s ---")
@@ -705,7 +750,7 @@ def main(argv: Optional[list] = None):
             # Accumulate warnings
             all_warnings.extend(orchestrator.get_all_warnings())
 
-        # 8. Check for conversion warnings with --strict
+        # Check for conversion warnings with --strict
         if all_warnings and args.strict:
             print("\nError: Lossy conversions detected with --strict flag", file=sys.stderr)
             print("See warnings above for details.", file=sys.stderr)
