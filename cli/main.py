@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from core.registry import FormatRegistry
-from core.orchestrator import UniversalSyncOrchestrator, sync_all_config_types, SyncResult
+from core.orchestrator import UniversalSyncOrchestrator, sync_all_config_types
 from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
 
