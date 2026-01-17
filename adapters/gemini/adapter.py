@@ -73,16 +73,26 @@ class GeminiAdapter(FormatAdapter):
 
     def read(self, file_path: Path, config_type: ConfigType) -> CanonicalConfig:
         """Read file and convert to canonical (delegates to handler)."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except PermissionError:
+            raise ValueError(f"Permission denied: {file_path}")
+        except FileNotFoundError:
+            raise ValueError(f"File not found: {file_path}")
         return self.to_canonical(content, config_type, file_path)
 
     def write(self, canonical_obj: CanonicalConfig, file_path: Path, config_type: ConfigType,
               options: dict = None):
         """Write canonical to file (delegates to handler)."""
         content = self.from_canonical(canonical_obj, config_type, options)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except PermissionError:
+            raise ValueError(f"Permission denied: {file_path}")
+        except FileNotFoundError:
+            raise ValueError(f"File not found: {file_path}")
 
     def to_canonical(self, content: str, config_type: ConfigType, file_path: Optional[Path] = None) -> CanonicalConfig:
         """
@@ -110,6 +120,10 @@ class GeminiAdapter(FormatAdapter):
     def get_warnings(self) -> List[str]:
         """Return warnings about data loss or unsupported features."""
         return self.warnings
+
+    def clear_conversion_warnings(self):
+        """Clear any stored conversion warnings."""
+        self.warnings = []
 
     def _get_handler(self, config_type: ConfigType):
         """Get handler for config type or raise error if unsupported."""

@@ -46,7 +46,7 @@ class CopilotAdapter(FormatAdapter):
             return ".prompt.md"
         return self.file_extension
 
-    def get_config_subdir(self, config_type: ConfigType) -> str:
+    def get_config_subdir(self, config_type: ConfigType) -> Optional[str]:
         """Copilot uses 'prompts' for slash commands instead of 'commands'."""
         if config_type == ConfigType.SLASH_COMMAND:
             return "prompts"
