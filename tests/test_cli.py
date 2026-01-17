@@ -105,17 +105,6 @@ class TestCLIArgumentParsing:
             ])
             assert args.target_format == fmt
 
-    def test_config_type_default(self, parser, base_args):
-        """Test --config-type defaults to 'agent'."""
-        args = parser.parse_args(base_args)
-        assert args.config_type == 'agent'
-
-    def test_config_type_choices(self, parser, base_args):
-        """Test --config-type accepts 'agent', 'permission', 'slash-command'."""
-        for config_type in ['agent', 'permission', 'slash-command']:
-            args = parser.parse_args(base_args + ['--config-type', config_type])
-            assert args.config_type == config_type
-
     def test_direction_default(self, parser, base_args):
         """Test --direction defaults to 'both'."""
         args = parser.parse_args(base_args)
@@ -303,7 +292,8 @@ class TestErrorHandling:
                 '--source-dir', str(source),
                 '--target-dir', str(target),
                 '--source-format', 'claude',
-                '--target-format', 'copilot'
+                '--target-format', 'copilot',
+                '--only', 'agents'  # Explicit config type to use single-type mode
             ])
             # CLI should propagate orchestrator errors with non-zero exit
             assert result != 0
@@ -325,7 +315,7 @@ class TestErrorHandling:
             '--target-dir', str(target),
             '--source-format', 'gemini',
             '--target-format', 'copilot',
-            '--config-type', 'agent'
+            '--only', 'agents'
         ])
         
         assert result != 0
@@ -339,7 +329,7 @@ class TestErrorHandling:
             '--target-dir', str(target),
             '--source-format', 'copilot',
             '--target-format', 'gemini',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
         
         assert result != 0
@@ -420,13 +410,13 @@ class TestSyncInvocation:
             # TODO: When implemented, verify target_format='copilot' passed
 
     def test_orchestrator_receives_config_type(self, base_args):
-        """Orchestrator constructed with correct ConfigType enum."""
+        """Orchestrator constructed with correct ConfigType enum via --only."""
         with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            # Test with explicit config type
-            main(base_args + ['--config-type', 'agent'])
+            # Test with explicit config type via --only
+            main(base_args + ['--only', 'agents'])
 
             # TODO: When implemented, verify ConfigType.AGENT passed
 
@@ -622,7 +612,7 @@ Instructions.
         # Record initial state of target directory
         initial_files = list(valid_target_dir.iterdir())
 
-        result = main(base_args + ['--dry-run'])
+        main(base_args + ['--dry-run', '--only', 'agents'])
 
         # Target directory should be unchanged
         final_files = list(valid_target_dir.iterdir())
@@ -630,11 +620,11 @@ Instructions.
 
     def test_dry_run_outputs_preview(self, base_args, capsys):
         """Dry-run outputs what would be done."""
-        main(base_args + ['--dry-run'])
+        main(base_args + ['--dry-run', '--only', 'agents'])
 
         captured = capsys.readouterr()
-        # Current stub outputs "Dry-run mode enabled"
-        assert 'dry-run' in captured.out.lower() or 'Dry-run' in captured.out
+        # Should output something related to dry-run mode
+        assert 'dry-run' in captured.out.lower() or 'Dry-run' in captured.out or 'DRY RUN' in captured.out
 
 
 class TestVerboseMode:
@@ -939,13 +929,13 @@ Test instructions.
         assert 'test-agent' in content
 
     def test_config_type_specified_for_conversion(self, valid_source_file, valid_output_file):
-        """--config-type can be specified for file conversion."""
+        """--only can be specified for file conversion (single type)."""
         result = main([
             '--convert-file', str(valid_source_file),
             '--output', str(valid_output_file),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'agent'
+            '--only', 'agents'
         ])
         assert result == 0
 
@@ -997,13 +987,13 @@ class TestCLIPermissionSupport:
             '--target-format', 'copilot'
         ]
 
-    def test_config_type_permission_argument(self, base_args):
-        """Test --config-type permission is accepted."""
+    def test_only_permission_argument(self, base_args):
+        """Test --only permissions is accepted."""
         with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            result = main(base_args + ['--config-type', 'permission'])
+            result = main(base_args + ['--only', 'permissions'])
             
             assert result == 0
             # Verify correct ConfigType enum passed
@@ -1011,7 +1001,7 @@ class TestCLIPermissionSupport:
             assert call_kwargs['config_type'] == ConfigType.PERMISSION
 
     def test_permission_file_conversion(self, tmp_path):
-        """Test --config-type permission with single file conversion."""
+        """Test --only permissions with single file conversion."""
         source_file = tmp_path / "settings.json"
         source_file.write_text("{}")
         
@@ -1040,7 +1030,7 @@ class TestCLIPermissionSupport:
                 '--convert-file', str(source_file),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'permission'
+                '--only', 'permissions'
             ])
 
             assert result == 0
@@ -1059,7 +1049,7 @@ class TestCLIPermissionSupport:
             # Simulate orchestrator raising ValueError for unsupported config type
             mock_orch.side_effect = ValueError("Format 'copilot' does not support permission")
             
-            result = main(base_args + ['--config-type', 'permission'])
+            result = main(base_args + ['--only', 'permissions'])
             
             assert result != 0
 
@@ -1069,7 +1059,7 @@ class TestCLIPermissionSupport:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            result = main(base_args + ['--config-type', 'permission', '--dry-run'])
+            result = main(base_args + ['--only', 'permissions', '--dry-run'])
 
             assert result == 0
             call_kwargs = mock_orch.call_args.kwargs
@@ -1113,7 +1103,7 @@ class TestCLIPermissionSupport:
                 '--convert-file', str(source_file),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'permission',
+                '--only', 'permissions',
                 '--strict'
             ])
 
@@ -1156,7 +1146,7 @@ class TestCLIPermissionSupport:
                 '--convert-file', str(source_file),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'permission',
+                '--only', 'permissions',
                 '--strict'
             ])
 
@@ -1182,7 +1172,7 @@ class TestCLIPermissionSupport:
             '--target-dir', str(target_dir),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--strict'
         ])
 
@@ -1211,7 +1201,7 @@ class TestCLIGeminiIntegration:
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
         assert args.source_format == 'gemini'
 
@@ -1228,7 +1218,7 @@ class TestCLIGeminiIntegration:
             '--target-dir', str(gemini_dir),
             '--source-format', 'claude',
             '--target-format', 'gemini',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
         assert args.target_format == 'gemini'
 
@@ -1254,7 +1244,7 @@ Test instructions.
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Verify success
@@ -1277,7 +1267,7 @@ Single file conversion test.
             '--convert-file', str(gemini_file),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--output', str(output_file)
         ])
 
@@ -1301,7 +1291,7 @@ Auto-detection test.
         result = main([
             '--convert-file', str(gemini_file),
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Should succeed with auto-detection
@@ -1329,7 +1319,7 @@ Dry-run test.
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--dry-run'
         ])
 
@@ -1368,7 +1358,7 @@ Claude command.
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--bidirectional'
         ])
 
@@ -1389,7 +1379,7 @@ Claude command.
             '--convert-file', str(gemini_file),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Should fail with non-zero exit code
@@ -1406,7 +1396,7 @@ Claude command.
             '--convert-file', str(gemini_file),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Should fail with non-zero exit code
@@ -1438,7 +1428,7 @@ Create a git commit.
             '--target-dir', str(copilot_dir),
             '--source-format', 'gemini',
             '--target-format', 'copilot',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Verify success
@@ -1499,13 +1489,6 @@ class TestOnlyFlag:
         assert result != 0
         captured = capsys.readouterr()
         assert 'invalid' in captured.err.lower()
-
-    def test_only_takes_precedence_over_config_type(self, base_args, capsys):
-        """Test --only takes precedence with warning when both specified."""
-        result = main(base_args + ['--only', 'commands', '--config-type', 'permission'])
-        captured = capsys.readouterr()
-        assert 'warning' in captured.err.lower()
-        assert 'precedence' in captured.err.lower()
 
     def test_only_accepts_singular_forms(self, parser, base_args):
         """Test --only accepts singular form (agent vs agents)."""
@@ -1572,7 +1555,7 @@ class TestYesFlag:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            main(base_args + ['--yes'])
+            main(base_args + ['--yes', '--only', 'agents'])
 
             # Verify orchestrator was called with auto_confirm=True
             call_kwargs = mock_orch.call_args.kwargs
@@ -1582,10 +1565,314 @@ class TestYesFlag:
         """Test --yes does not prompt for input (doesn't hang on input())."""
         # This test verifies that with --yes, the sync completes without
         # calling input() which would hang in non-interactive mode
-        result = main(base_args + ['--yes'])
+        result = main(base_args + ['--yes', '--only', 'agents'])
         assert result == 0
 
     def test_only_and_yes_combined(self, base_args):
         """Test --only and --yes work together."""
         result = main(base_args + ['--only', 'agents,commands', '--yes'])
         assert result == 0
+
+
+class TestAutoDiscovery:
+    """Tests for auto-discovery of profile paths from format specification."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create argument parser instance."""
+        return create_parser()
+
+    def test_no_autodiscover_flag_parsing(self, parser):
+        """Test --no-autodiscover flag is parsed correctly."""
+        # Without flag
+        args = parser.parse_args([
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert args.no_autodiscover is False
+
+        # With flag
+        args = parser.parse_args([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--no-autodiscover'
+        ])
+        assert args.no_autodiscover is True
+
+    def test_no_autodiscover_requires_source_dir(self, capsys):
+        """Test --no-autodiscover requires --source-dir."""
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--no-autodiscover'
+        ])
+        assert result != 0
+        captured = capsys.readouterr()
+        assert '--source-dir required' in captured.err
+
+    def test_no_autodiscover_requires_target_dir(self, tmp_path, capsys):
+        """Test --no-autodiscover requires --target-dir."""
+        source = tmp_path / "source"
+        source.mkdir()
+        
+        result = main([
+            '--source-dir', str(source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--no-autodiscover'
+        ])
+        assert result != 0
+        captured = capsys.readouterr()
+        assert '--target-dir required' in captured.err
+
+    def test_autodiscover_source_path(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery of source path when not provided."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_agents = fake_home / ".claude" / "agents"
+        claude_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        # Create target directory
+        target = tmp_path / "target"
+        target.mkdir()
+        
+        result = main([
+            '--target-dir', str(target),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (with dry-run, no actual sync needed)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered source directory' in captured.out
+
+    def test_autodiscover_target_path(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery of target path when not provided."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        
+        # Create source directory
+        source = tmp_path / "source"
+        source.mkdir()
+        
+        # Create target parent directory so we can write to it
+        config_dir = fake_home / ".config" / "Code" / "User"
+        config_dir.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-dir', str(source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (with dry-run)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_both_paths(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery of both source and target paths."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_agents = fake_home / ".claude" / "agents"
+        claude_agents.mkdir(parents=True)
+        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
+        copilot_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (both paths auto-discovered)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered source directory' in captured.out
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_slash_command_paths(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery uses config type for path resolution."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_commands = fake_home / ".claude" / "commands"
+        claude_commands.mkdir(parents=True)
+        copilot_prompts = fake_home / ".config" / "Code" / "User" / "prompts"
+        copilot_prompts.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--only', 'commands',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed with command-specific paths
+        assert result == 0
+        captured = capsys.readouterr()
+        # Verify the correct subdirectories are used
+        assert 'commands' in captured.out or 'prompts' in captured.out
+
+    def test_autodiscover_permission_paths(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery for permission config type."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_root = fake_home / ".claude"
+        claude_root.mkdir(parents=True)
+        copilot_root = fake_home / ".config" / "Code" / "User"
+        copilot_root.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--only', 'permissions',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (permissions use root dirs)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered source directory' in captured.out
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_gemini_unsupported_config_type(self, tmp_path, monkeypatch, capsys):
+        """Test error when auto-discovering path for unsupported config type."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        gemini_dir = fake_home / ".gemini"
+        gemini_dir.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        # Gemini doesn't support agents
+        result = main([
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--only', 'agents',
+            '--dry-run'
+        ])
+        
+        assert result != 0
+        captured = capsys.readouterr()
+        assert 'Cannot auto-discover' in captured.err or 'does not support' in captured.err
+
+    def test_explicit_dir_overrides_autodiscover(self, tmp_path, monkeypatch, capsys):
+        """Test explicit --source-dir overrides auto-discovery."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        
+        # Create explicit source directory
+        explicit_source = tmp_path / "explicit-source"
+        explicit_source.mkdir()
+        
+        # Create copilot target directory parent
+        copilot_agents = fake_home / ".config" / "Code" / "User"
+        copilot_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-dir', str(explicit_source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed using explicit source
+        assert result == 0
+        captured = capsys.readouterr()
+        # Source should NOT be auto-discovered since it was explicit
+        assert 'Auto-discovered source directory' not in captured.out
+        # Target should be auto-discovered
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_nonexistent_source_errors(self, tmp_path, monkeypatch, capsys):
+        """Test error when auto-discovered source directory doesn't exist."""
+        # Create a fake home directory with NO claude directory
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        
+        # Create copilot target directory  
+        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
+        copilot_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run'
+        ])
+        
+        # Should fail because auto-discovered source doesn't exist
+        assert result != 0
+        captured = capsys.readouterr()
+        assert 'does not exist' in captured.err
+
+    def test_format_only_usage_pattern(self, tmp_path, monkeypatch, capsys):
+        """Test the main use case: format-only invocation."""
+        # Create complete fake home environment
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_agents = fake_home / ".claude" / "agents"
+        claude_agents.mkdir(parents=True)
+        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
+        copilot_agents.mkdir(parents=True)
+        
+        # Create a test agent file
+        (claude_agents / "test-agent.md").write_text("""---
+name: test-agent
+description: Test agent
+---
+Test instructions.
+""")
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        # The format-only invocation pattern (--yes to skip confirmation)
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--yes'
+        ])
+        
+        # Should succeed and sync the file
+        assert result == 0
+        
+        # Verify file was created
+        assert (copilot_agents / "test-agent.agent.md").exists()

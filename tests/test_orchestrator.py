@@ -2378,7 +2378,7 @@ class TestSyncFileCLI:
             '--sync-file', str(source_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2394,7 +2394,7 @@ class TestSyncFileCLI:
         result = main([
             '--sync-file', str(source_file),
             '--target-file', str(target_file),
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2412,7 +2412,7 @@ class TestSyncFileCLI:
             '--source-dir', str(tmp_path),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2429,7 +2429,7 @@ class TestSyncFileCLI:
             '--target-file', str(target_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_SUCCESS
@@ -2451,7 +2451,7 @@ class TestSyncFileCLI:
             '--target-file', str(target_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--bidirectional'
         ])
 
@@ -2476,7 +2476,7 @@ class TestSyncFileCLI:
             '--target-file', str(target_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2640,7 +2640,7 @@ class TestOrchestratorWarningAccumulation:
             '--target-dir', str(target_dir),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--strict'
         ])
 
@@ -2668,9 +2668,387 @@ class TestOrchestratorWarningAccumulation:
             '--target-dir', str(target_dir),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--strict'
         ])
 
         # Should succeed (no warnings)
         assert result == EXIT_SUCCESS
+
+
+class TestSyncAllConfigTypes:
+    """Tests for sync_all_config_types() function."""
+
+    @pytest.fixture
+    def registry(self):
+        """Create registry with adapters."""
+        registry = FormatRegistry()
+        registry.register(ClaudeAdapter())
+        registry.register(CopilotAdapter())
+        return registry
+
+    @pytest.fixture
+    def state_manager(self, tmp_path):
+        """Create state manager with temp file."""
+        state_file = tmp_path / "test_state.json"
+        return SyncStateManager(state_file)
+
+    def test_sync_all_config_types_auto_detect(self, registry, state_manager, tmp_path):
+        """Test auto-detection of config types from directory structure."""
+        from core.orchestrator import sync_all_config_types, SyncResult
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create agents directory with agent file
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "test-agent.md").write_text("""---
+name: test-agent
+description: Test agent
+---
+Instructions.
+""")
+
+        # Create commands directory with command file
+        commands_dir = source_dir / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "test-cmd.md").write_text("""---
+description: Test command
+---
+Command instructions.
+""")
+
+        # Track output
+        output_lines = []
+        def capture_log(msg=""):
+            output_lines.append(msg)
+
+        results = sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            config_types=None,  # Auto-detect
+            skip_confirmation=True,
+            logger=capture_log,
+        )
+
+        # Should have results for detected config types
+        assert len(results) >= 1
+        # All results should be successful
+        for result in results.values():
+            assert result.success
+
+    def test_sync_all_config_types_explicit_types(self, registry, state_manager, tmp_path):
+        """Test syncing explicit config types."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create agents subdirectory with agent file
+        # sync_all_config_types uses subdirectory-based detection
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "test.md").write_text("""---
+name: test
+description: Test agent
+---
+Instructions.
+""")
+
+        # Create target agents directory too
+        target_agents_dir = target_dir / "agents"
+        target_agents_dir.mkdir()
+
+        output_lines = []
+        results = sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            config_types=[ConfigType.AGENT],
+            skip_confirmation=True,
+            logger=lambda msg="": output_lines.append(msg),
+        )
+
+        # With explicit config_types, sync runs for the specified type
+        assert ConfigType.AGENT in results
+        assert results[ConfigType.AGENT].success
+
+    def test_sync_all_config_types_preview_display(self, registry, state_manager, tmp_path):
+        """Test that preview displays detected configurations."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create agents directory with agent files
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        for i in range(3):
+            (agents_dir / f"agent-{i}.md").write_text(f"""---
+name: agent-{i}
+description: Agent {i}
+---
+Instructions.
+""")
+
+        output_lines = []
+        sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            skip_confirmation=True,
+            logger=lambda msg="": output_lines.append(msg),
+        )
+
+        # Should have preview output
+        output = '\n'.join(output_lines)
+        assert 'Detected configurations:' in output
+        assert 'agent' in output.lower()
+
+    def test_sync_all_config_types_user_confirmation(self, registry, state_manager, tmp_path):
+        """Test user confirmation is requested when skip_confirmation=False."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create agents directory with agent file (for detection)
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "test.md").write_text("""---
+name: test
+description: Test
+---
+Instructions.
+""")
+
+        output_lines = []
+        # Mock input to decline
+        with patch('builtins.input', return_value='n'):
+            results = sync_all_config_types(
+                source_dir=source_dir,
+                target_dir=target_dir,
+                source_format='claude',
+                target_format='copilot',
+                format_registry=registry,
+                state_manager=state_manager,
+                skip_confirmation=False,  # Will prompt
+                logger=lambda msg="": output_lines.append(msg),
+            )
+
+        # Should be empty (user cancelled)
+        assert len(results) == 0
+        output = '\n'.join(output_lines)
+        assert 'cancelled' in output.lower()
+
+    def test_sync_all_config_types_error_continues(self, registry, state_manager, tmp_path):
+        """Test that errors in one config type don't block others."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create valid agent in agents/ subdirectory (matches _CONFIG_TYPE_SUBDIRS)
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "good-agent.md").write_text("""---
+name: good-agent
+description: Good agent
+---
+Instructions.
+""")
+
+        # Create invalid permission file (settings.json is Claude's permission file format)
+        # Invalid JSON will fail to parse during sync
+        (source_dir / "settings.json").write_text("invalid json {{{")
+
+        output_lines = []
+        results = sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            config_types=[ConfigType.AGENT, ConfigType.PERMISSION],
+            skip_confirmation=True,
+            logger=lambda msg="": output_lines.append(msg),
+        )
+
+        # Should have results for both types
+        assert len(results) == 2
+        # AGENT should succeed
+        assert results[ConfigType.AGENT].success
+        # PERMISSION should have recorded errors (in stats, not as fatal error)
+        # The orchestrator continues even when individual files fail to parse
+        perm_result = results[ConfigType.PERMISSION]
+        assert perm_result.stats['errors'] >= 1 or not perm_result.success
+
+    def test_sync_all_config_types_combined_summary(self, registry, state_manager, tmp_path):
+        """Test combined summary is displayed for multiple config types."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create agents directory with agent file
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "test-agent.md").write_text("""---
+name: test-agent
+description: Test agent
+---
+Instructions.
+""")
+
+        # Create commands directory with command file
+        commands_dir = source_dir / "commands"
+        commands_dir.mkdir()
+        (commands_dir / "test-cmd.md").write_text("""---
+description: Test command
+---
+Command instructions.
+""")
+
+        output_lines = []
+        results = sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            skip_confirmation=True,
+            logger=lambda msg="": output_lines.append(msg),
+        )
+
+        # Should have combined summary
+        output = '\n'.join(output_lines)
+        if len(results) > 1:
+            assert 'Combined Summary' in output
+
+    def test_sync_all_config_types_dry_run(self, registry, state_manager, tmp_path):
+        """Test dry-run mode doesn't modify files."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        # Create agent in agents/ subdirectory (matches _CONFIG_TYPE_SUBDIRS)
+        agents_dir = source_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "test.md").write_text("""---
+name: test
+description: Test
+---
+Instructions.
+""")
+
+        output_lines = []
+        sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            config_types=[ConfigType.AGENT],
+            skip_confirmation=True,
+            dry_run=True,
+            logger=lambda msg="": output_lines.append(msg),
+        )
+
+        # Target file should NOT exist in the agents subdirectory
+        assert not (target_dir / "agents" / "test.agent.md").exists()
+
+    def test_sync_all_config_types_no_files(self, registry, state_manager, tmp_path):
+        """Test behavior when no files are detected."""
+        from core.orchestrator import sync_all_config_types
+        
+        source_dir = tmp_path / "source"
+        target_dir = tmp_path / "target"
+        source_dir.mkdir()
+        target_dir.mkdir()
+
+        output_lines = []
+        results = sync_all_config_types(
+            source_dir=source_dir,
+            target_dir=target_dir,
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            skip_confirmation=True,
+            logger=lambda msg="": output_lines.append(msg),
+        )
+
+        # Should return empty results
+        assert len(results) == 0
+        output = '\n'.join(output_lines)
+        assert 'No supported config types' in output or 'No files' in output
+
+
+class TestSyncResult:
+    """Tests for SyncResult dataclass."""
+
+    def test_sync_result_success_property(self):
+        """Test success property returns True when no error."""
+        from core.orchestrator import SyncResult
+        
+        result = SyncResult(
+            config_type=ConfigType.AGENT,
+            stats={'source_to_target': 1, 'errors': 0},
+            warnings=[],
+            error=None
+        )
+        assert result.success is True
+
+    def test_sync_result_failure_property(self):
+        """Test success property returns False when error exists."""
+        from core.orchestrator import SyncResult
+        
+        result = SyncResult(
+            config_type=ConfigType.AGENT,
+            stats={'errors': 1},
+            warnings=[],
+            error="Something went wrong"
+        )
+        assert result.success is False
+
+    def test_sync_result_with_warnings(self):
+        """Test SyncResult can store warnings."""
+        from core.orchestrator import SyncResult
+        
+        result = SyncResult(
+            config_type=ConfigType.PERMISSION,
+            stats={'source_to_target': 1},
+            warnings=["Warning 1", "Warning 2"],
+            error=None
+        )
+        assert len(result.warnings) == 2
+        assert result.success is True

@@ -23,13 +23,21 @@ pip install -r requirements.txt
 
 ### CLI
 ```bash
-# Universal sync between any formats
+# Universal sync between any formats (auto-detects all config types)
+python -m cli.main \
+  --source-dir ~/.claude \
+  --target-dir .github \
+  --source-format claude \
+  --target-format copilot \
+  --dry-run
+
+# Sync only agents (skip permissions and commands)
 python -m cli.main \
   --source-dir ~/.claude/agents \
   --target-dir .github/agents \
   --source-format claude \
   --target-format copilot \
-  --config-type agent \
+  --only agents \
   --dry-run
 
 # Single-file conversion
@@ -43,13 +51,13 @@ python -m cli.main \
   --convert-file my-agent.md \
   --target-format copilot
 
-# Sync slash commands between formats
+# Sync only slash commands
 python -m cli.main \
   --source-dir ~/.claude/commands \
   --target-dir .github/prompts \
   --source-format claude \
   --target-format copilot \
-  --config-type slash-command \
+  --only commands \
   --dry-run
 
 # Real bidirectional sync of live settings files (in-place merge)
@@ -59,7 +67,7 @@ python -m cli.main \
   --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
   --source-format claude \
   --target-format copilot \
-  --config-type permission \
+  --only permissions \
   --dry-run
 
 # Bidirectional in-place sync (syncs changes both ways)
@@ -68,7 +76,7 @@ python -m cli.main \
   --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
   --source-format claude \
   --target-format copilot \
-  --config-type permission \
+  --only permissions \
   --bidirectional
 
 # Sync custom commands with Gemini CLI
@@ -77,7 +85,7 @@ python -m cli.main \
   --target-dir ~/.claude/commands \
   --source-format gemini \
   --target-format claude \
-  --config-type slash-command \
+  --only commands \
   --dry-run
 
 # Convert single Gemini command to Copilot format
@@ -215,7 +223,7 @@ python -m cli.main \
   --target-dir .github \
   --source-format claude \
   --target-format copilot \
-  --config-type permission \
+  --only permissions \
   --strict
 
 # Strict mode with bidirectional in-place sync
@@ -225,7 +233,7 @@ python -m cli.main \
   --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
   --source-format claude \
   --target-format copilot \
-  --config-type permission \
+  --only permissions \
   --bidirectional \
   --strict
 ```
@@ -426,7 +434,7 @@ python -m cli.main \
   --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
   --source-format claude \
   --target-format copilot \
-  --config-type permission \
+  --only permissions \
   --dry-run
 ```
 
@@ -437,7 +445,7 @@ python -m cli.main \
   --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
   --source-format claude \
   --target-format copilot \
-  --config-type permission
+  --only permissions
 ```
 
 **Bidirectional sync (merge both ways):**
@@ -447,7 +455,7 @@ python -m cli.main \
   --target-file "C:/Users/user/AppData/Roaming/Code/User/settings.json" \
   --source-format claude \
   --target-format copilot \
-  --config-type permission \
+  --only permissions \
   --bidirectional
 ```
 
@@ -458,7 +466,7 @@ python -m cli.main \
   --target-file ~/.vscode/agents/planner.agent.md \
   --source-format claude \
   --target-format copilot \
-  --config-type agent
+  --only agents
 ```
 
 ## Dependencies
