@@ -25,6 +25,7 @@ from core.registry import FormatRegistry
 from core.orchestrator import UniversalSyncOrchestrator, sync_all_config_types
 from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
+from core.profile_paths import ProfilePathResolver
 
 # Import adapters
 from adapters import ClaudeAdapter, CopilotAdapter, GeminiAdapter
@@ -135,6 +136,9 @@ def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.Argumen
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Auto-discover profile paths (format-only, directories auto-resolved)
+  %(prog)s --source-format claude --target-format copilot
+
   # Sync Claude agents to Copilot
   %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
            --source-format claude --target-format copilot \
@@ -180,6 +184,9 @@ Examples:
   %(prog)s --source-dir ~/.claude --target-dir .github \
            --source-format claude --target-format copilot \
            --only agents,permissions --yes --dry-run
+
+  # Disable auto-discovery (require explicit paths)
+  %(prog)s --source-format claude --target-format copilot --no-autodiscover
         """
     )
 
@@ -320,6 +327,13 @@ Examples:
         '--add-handoffs',
         action='store_true',
         help='Add handoffs placeholder (only when converting to Copilot)'
+    )
+
+    # Auto-discovery control
+    parser.add_argument(
+        '--no-autodiscover',
+        action='store_true',
+        help='Disable auto-discovery; require explicit --source-dir and --target-dir'
     )
 
     return parser
@@ -599,19 +613,47 @@ def main(argv: Optional[list] = None):
                 print("Run with --verbose for detailed traceback", file=sys.stderr)
             return EXIT_ERROR
 
-    # Directory sync mode - validate required arguments
-    if not args.source_dir:
-        print("Error: --source-dir is required for directory sync", file=sys.stderr)
-        return EXIT_ERROR
-    if not args.target_dir:
-        print("Error: --target-dir is required for directory sync", file=sys.stderr)
-        return EXIT_ERROR
+    # Directory sync mode - validate required arguments and auto-discover paths
+    
+    # First, validate formats are provided for directory sync
     if not args.source_format:
         print("Error: --source-format is required for directory sync", file=sys.stderr)
         return EXIT_ERROR
     if not args.target_format:
         print("Error: --target-format is required for directory sync", file=sys.stderr)
         return EXIT_ERROR
+
+    # Auto-discover paths if not explicitly provided
+    profile_resolver = ProfilePathResolver()
+    
+    # Determine effective config type for path resolution
+    effective_config_type = CONFIG_TYPE_MAP[args.config_type]
+    
+    if args.source_dir is None:
+        if args.no_autodiscover:
+            print("Error: --source-dir required when --no-autodiscover is set", file=sys.stderr)
+            return EXIT_ERROR
+        # Auto-resolve from format and config type
+        try:
+            args.source_dir = profile_resolver.get_config_subdir(args.source_format, effective_config_type)
+            if args.verbose:
+                print(f"Auto-discovered source directory: {args.source_dir}")
+        except ValueError as e:
+            print(f"Error: Cannot auto-discover source path: {e}", file=sys.stderr)
+            return EXIT_ERROR
+
+    if args.target_dir is None:
+        if args.no_autodiscover:
+            print("Error: --target-dir required when --no-autodiscover is set", file=sys.stderr)
+            return EXIT_ERROR
+        # Auto-resolve from format and config type
+        try:
+            args.target_dir = profile_resolver.get_config_subdir(args.target_format, effective_config_type)
+            if args.verbose:
+                print(f"Auto-discovered target directory: {args.target_dir}")
+        except ValueError as e:
+            print(f"Error: Cannot auto-discover target path: {e}", file=sys.stderr)
+            return EXIT_ERROR
 
     # Parse and validate --only if provided
     only_config_types = None
