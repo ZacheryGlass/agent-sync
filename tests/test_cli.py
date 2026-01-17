@@ -623,7 +623,7 @@ Instructions.
         # Record initial state of target directory
         initial_files = list(valid_target_dir.iterdir())
 
-        result = main(base_args + ['--dry-run', '--config-type', 'agent'])
+        main(base_args + ['--dry-run', '--config-type', 'agent'])
 
         # Target directory should be unchanged
         final_files = list(valid_target_dir.iterdir())
