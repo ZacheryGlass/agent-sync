@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from .canonical_models import ConfigType, CanonicalAgent, CanonicalPermission, CanonicalSlashCommand
-from .registry import FormatRegistry, _CONFIG_TYPE_SUBDIRS
+from .registry import FormatRegistry
 from .state_manager import SyncStateManager
 
 
@@ -1090,12 +1090,14 @@ def sync_all_config_types(
 
         try:
             # Determine actual source/target directories based on config type
-            # For agents: source_dir/agents/, target_dir/agents/
-            # For commands: source_dir/commands/, target_dir/commands/
-            # For permissions: source_dir/, target_dir/ (root level)
-            subdir = _CONFIG_TYPE_SUBDIRS.get(ct)
-            actual_source_dir = source_dir / subdir if subdir else source_dir
-            actual_target_dir = target_dir / subdir if subdir else target_dir
+            # Each format defines its own subdirectory structure via get_config_subdir()
+            # For example: Claude uses commands/, Copilot uses prompts/ for slash commands
+            source_adapter = format_registry.get_adapter(source_format)
+            target_adapter = format_registry.get_adapter(target_format)
+            source_subdir = source_adapter.get_config_subdir(ct)
+            target_subdir = target_adapter.get_config_subdir(ct)
+            actual_source_dir = source_dir / source_subdir if source_subdir else source_dir
+            actual_target_dir = target_dir / target_subdir if target_subdir else target_dir
 
             # Ensure target directory exists
             if not dry_run:

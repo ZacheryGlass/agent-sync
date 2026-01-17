@@ -248,13 +248,14 @@ class TestErrorHandling:
         assert result != 0
 
     def test_missing_target_dir_exits_error(self, valid_dirs):
-        """Missing --target-dir produces error exit."""
+        """Missing --target-dir with --no-autodiscover produces error exit."""
         source, _ = valid_dirs
-        # Validation happens in main() now, not parser
+        # With --no-autodiscover, explicit paths are required
         result = main([
             '--source-dir', str(source),
             '--source-format', 'claude',
-            '--target-format', 'copilot'
+            '--target-format', 'copilot',
+            '--no-autodiscover'
         ])
         assert result != 0
 
@@ -1852,7 +1853,7 @@ class TestAutoDiscovery:
         claude_agents.mkdir(parents=True)
         copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
         copilot_agents.mkdir(parents=True)
-        
+
         # Create a test agent file
         (claude_agents / "test-agent.md").write_text("""---
 name: test-agent
@@ -1860,19 +1861,23 @@ description: Test agent
 ---
 Test instructions.
 """)
-        
+
         # Mock Path.home() to return fake home
         monkeypatch.setattr(Path, 'home', lambda: fake_home)
-        
+
+        # Mock platform to Linux (test uses Linux paths)
+        import platform
+        monkeypatch.setattr(platform, 'system', lambda: 'Linux')
+
         # The format-only invocation pattern (--yes to skip confirmation)
         result = main([
             '--source-format', 'claude',
             '--target-format', 'copilot',
             '--yes'
         ])
-        
+
         # Should succeed and sync the file
         assert result == 0
-        
+
         # Verify file was created
         assert (copilot_agents / "test-agent.agent.md").exists()
