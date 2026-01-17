@@ -1062,8 +1062,9 @@ def sync_all_config_types(
     log("Detected configurations:")
     for ct, count in file_counts.items():
         if count > 0:
-            # Use plural form for display
-            type_name = ct.value + "s" if not ct.value.endswith('s') else ct.value
+            # Use plural form for display, with human-readable names
+            display_base = ct.value.replace("_", " ")
+            type_name = display_base if display_base.endswith('s') else display_base + "s"
             log(f"  - {count} {type_name}")
 
     total_files = sum(file_counts.values())
