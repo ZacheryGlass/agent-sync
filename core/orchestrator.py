@@ -24,6 +24,14 @@ from .registry import FormatRegistry
 from .state_manager import SyncStateManager
 
 
+# Subdirectory mapping for different config types (matches registry.py)
+_CONFIG_TYPE_SUBDIRS = {
+    ConfigType.AGENT: "agents",
+    ConfigType.SLASH_COMMAND: "commands",
+    ConfigType.PERMISSION: None,  # root level
+}
+
+
 @dataclass
 class FilePair:
     """
@@ -41,6 +49,28 @@ class FilePair:
     target_path: Optional[Path]
     source_mtime: Optional[float]
     target_mtime: Optional[float]
+
+
+@dataclass
+class SyncResult:
+    """
+    Result of syncing a single config type.
+
+    Attributes:
+        config_type: The ConfigType that was synced
+        stats: Dictionary of sync statistics
+        warnings: List of warnings generated during sync
+        error: Error message if sync failed, None if successful
+    """
+    config_type: ConfigType
+    stats: Dict[str, int]
+    warnings: List[str]
+    error: Optional[str] = None
+
+    @property
+    def success(self) -> bool:
+        """Return True if sync completed without fatal error."""
+        return self.error is None
 
 
 class UniversalSyncOrchestrator:
@@ -927,3 +957,253 @@ class UniversalSyncOrchestrator:
                 merged.metadata[key] = value
 
         return merged
+
+
+def sync_all_config_types(
+    source_dir: Path,
+    target_dir: Path,
+    source_format: str,
+    target_format: str,
+    format_registry: FormatRegistry,
+    state_manager: SyncStateManager,
+    config_types: Optional[List[ConfigType]] = None,
+    skip_confirmation: bool = False,
+    direction: str = 'both',
+    dry_run: bool = False,
+    force: bool = False,
+    verbose: bool = False,
+    strict: bool = False,
+    conversion_options: Optional[Dict[str, Any]] = None,
+    logger: Optional[Any] = None,
+) -> Dict[ConfigType, SyncResult]:
+    """
+    Sync multiple config types in sequence.
+
+    This function enables syncing agents, permissions, and slash commands
+    in a single operation. It auto-detects available config types if not
+    specified, displays a preview with file counts, and syncs each type
+    independently.
+
+    Args:
+        source_dir: Primary source directory
+        target_dir: Primary target directory
+        source_format: Source format name (e.g., 'claude')
+        target_format: Target format name (e.g., 'copilot')
+        format_registry: Registry containing adapters
+        state_manager: State tracking manager
+        config_types: Types to sync (None = auto-detect all supported types)
+        skip_confirmation: If True, don't prompt user for confirmation
+        direction: 'both', 'source-to-target', or 'target-to-source'
+        dry_run: If True, don't actually modify files
+        force: If True, auto-resolve conflicts using newest file
+        verbose: If True, print detailed logs
+        strict: If True, raise ValueError when lossy conversions are detected
+        conversion_options: Options to pass to adapters
+        logger: Callback for logging output (default: print)
+
+    Returns:
+        Dict mapping each config type to its SyncResult
+
+    Example:
+        results = sync_all_config_types(
+            source_dir=Path('~/.claude'),
+            target_dir=Path('.github'),
+            source_format='claude',
+            target_format='copilot',
+            format_registry=registry,
+            state_manager=state_manager,
+            skip_confirmation=True  # For CI/scripts
+        )
+
+        for config_type, result in results.items():
+            if result.success:
+                print(f"{config_type.value}: {result.stats['source_to_target']} synced")
+            else:
+                print(f"{config_type.value}: FAILED - {result.error}")
+    """
+    log = logger or print
+
+    # 1. Determine which config types to sync
+    if config_types is None:
+        # Auto-detect from source directory
+        detected = format_registry.detect_config_types_in_directory(
+            source_dir, source_format
+        )
+        # Filter to types supported by both source and target
+        config_types = [
+            ct for ct in detected.keys()
+            if format_registry.validate_conversion_support(
+                source_format, target_format, ct
+            )
+        ]
+
+    if not config_types:
+        log("No supported config types detected in source directory.")
+        return {}
+
+    # 2. Count files per config type for preview
+    file_counts: Dict[ConfigType, int] = {}
+    for ct in config_types:
+        source_counts = format_registry.detect_config_types_in_directory(
+            source_dir, source_format
+        )
+        target_counts = format_registry.detect_config_types_in_directory(
+            target_dir, target_format
+        )
+        # Count is max of source and target (either may have files to sync)
+        file_counts[ct] = max(
+            source_counts.get(ct, 0),
+            target_counts.get(ct, 0)
+        )
+
+    # 3. Display preview
+    log("Detected configurations:")
+    for ct, count in file_counts.items():
+        if count > 0:
+            # Use plural form for display
+            type_name = ct.value + "s" if not ct.value.endswith('s') else ct.value
+            log(f"  - {count} {type_name}")
+
+    total_files = sum(file_counts.values())
+    if total_files == 0:
+        log("\nNo files to sync.")
+        return {}
+
+    # 4. Confirm with user (unless skipped)
+    if not skip_confirmation and not dry_run:
+        log("")
+        try:
+            response = input("Proceed with sync? [y/N] ").strip().lower()
+            if response not in ('y', 'yes'):
+                log("Sync cancelled.")
+                return {}
+        except (EOFError, KeyboardInterrupt):
+            log("\nSync cancelled.")
+            return {}
+
+    # 5. Sync each config type independently
+    results: Dict[ConfigType, SyncResult] = {}
+    all_warnings: List[str] = []
+
+    for ct in config_types:
+        if verbose or len(config_types) > 1:
+            log(f"\n--- Syncing {ct.value}s ---")
+
+        try:
+            # Determine actual source/target directories based on config type
+            # For agents: source_dir/agents/, target_dir/agents/
+            # For commands: source_dir/commands/, target_dir/commands/
+            # For permissions: source_dir/, target_dir/ (root level)
+            subdir = _CONFIG_TYPE_SUBDIRS.get(ct)
+            actual_source_dir = source_dir / subdir if subdir else source_dir
+            actual_target_dir = target_dir / subdir if subdir else target_dir
+
+            # Ensure target directory exists
+            if not dry_run:
+                actual_target_dir.mkdir(parents=True, exist_ok=True)
+
+            orchestrator = UniversalSyncOrchestrator(
+                source_dir=actual_source_dir,
+                target_dir=actual_target_dir,
+                source_format=source_format,
+                target_format=target_format,
+                config_type=ct,
+                format_registry=format_registry,
+                state_manager=state_manager,
+                direction=direction,
+                dry_run=dry_run,
+                force=force,
+                auto_confirm=skip_confirmation,
+                verbose=verbose,
+                strict=strict,
+                conversion_options=conversion_options,
+                logger=logger,
+            )
+
+            orchestrator.sync()
+
+            # Collect warnings
+            warnings = orchestrator.get_all_warnings()
+            all_warnings.extend(warnings)
+
+            results[ct] = SyncResult(
+                config_type=ct,
+                stats=orchestrator.stats.copy(),
+                warnings=warnings,
+                error=None,
+            )
+
+        except Exception as e:
+            # Continue with other types even if one fails
+            error_msg = str(e)
+            log(f"Error syncing {ct.value}s: {error_msg}")
+            results[ct] = SyncResult(
+                config_type=ct,
+                stats={
+                    'source_to_target': 0,
+                    'target_to_source': 0,
+                    'deletions': 0,
+                    'conflicts': 0,
+                    'skipped': 0,
+                    'errors': 1,
+                },
+                warnings=[],
+                error=error_msg,
+            )
+
+    # 6. Display combined summary
+    if len(config_types) > 1:
+        _print_combined_summary(results, source_format, target_format, dry_run, log)
+
+    return results
+
+
+def _print_combined_summary(
+    results: Dict[ConfigType, SyncResult],
+    source_format: str,
+    target_format: str,
+    dry_run: bool,
+    logger: Any
+):
+    """Print combined summary for multi-config sync."""
+    logger("")
+    logger("=" * 60)
+    logger("Combined Summary:")
+    logger("")
+
+    total_s2t = 0
+    total_t2s = 0
+    total_deletions = 0
+    total_conflicts = 0
+    total_skipped = 0
+    total_errors = 0
+    failed_types = []
+
+    for ct, result in results.items():
+        if result.success:
+            total_s2t += result.stats['source_to_target']
+            total_t2s += result.stats['target_to_source']
+            total_deletions += result.stats['deletions']
+            total_conflicts += result.stats['conflicts']
+            total_skipped += result.stats['skipped']
+            total_errors += result.stats['errors']
+        else:
+            failed_types.append(ct.value)
+            total_errors += 1
+
+    logger(f"  {source_format} -> {target_format}: {total_s2t}")
+    logger(f"  {target_format} -> {source_format}: {total_t2s}")
+    logger(f"  Deletions:  {total_deletions}")
+    logger(f"  Conflicts:  {total_conflicts}")
+    logger(f"  Skipped:    {total_skipped}")
+    logger(f"  Errors:     {total_errors}")
+
+    if failed_types:
+        logger("")
+        logger(f"  Failed types: {', '.join(failed_types)}")
+
+    logger("=" * 60)
+
+    if dry_run:
+        logger("")
+        logger("This was a dry run. Use without --dry-run to apply changes.")
