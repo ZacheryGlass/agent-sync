@@ -1589,3 +1589,306 @@ class TestYesFlag:
         """Test --only and --yes work together."""
         result = main(base_args + ['--only', 'agents,commands', '--yes'])
         assert result == 0
+
+
+class TestAutoDiscovery:
+    """Tests for auto-discovery of profile paths from format specification."""
+
+    @pytest.fixture
+    def parser(self):
+        """Create argument parser instance."""
+        return create_parser()
+
+    def test_no_autodiscover_flag_parsing(self, parser):
+        """Test --no-autodiscover flag is parsed correctly."""
+        # Without flag
+        args = parser.parse_args([
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        assert args.no_autodiscover is False
+
+        # With flag
+        args = parser.parse_args([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--no-autodiscover'
+        ])
+        assert args.no_autodiscover is True
+
+    def test_no_autodiscover_requires_source_dir(self, capsys):
+        """Test --no-autodiscover requires --source-dir."""
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--no-autodiscover'
+        ])
+        assert result != 0
+        captured = capsys.readouterr()
+        assert '--source-dir required' in captured.err
+
+    def test_no_autodiscover_requires_target_dir(self, tmp_path, capsys):
+        """Test --no-autodiscover requires --target-dir."""
+        source = tmp_path / "source"
+        source.mkdir()
+        
+        result = main([
+            '--source-dir', str(source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--no-autodiscover'
+        ])
+        assert result != 0
+        captured = capsys.readouterr()
+        assert '--target-dir required' in captured.err
+
+    def test_autodiscover_source_path(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery of source path when not provided."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_agents = fake_home / ".claude" / "agents"
+        claude_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        # Create target directory
+        target = tmp_path / "target"
+        target.mkdir()
+        
+        result = main([
+            '--target-dir', str(target),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (with dry-run, no actual sync needed)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered source directory' in captured.out
+
+    def test_autodiscover_target_path(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery of target path when not provided."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        
+        # Create source directory
+        source = tmp_path / "source"
+        source.mkdir()
+        
+        # Create target parent directory so we can write to it
+        config_dir = fake_home / ".config" / "Code" / "User"
+        config_dir.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-dir', str(source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (with dry-run)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_both_paths(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery of both source and target paths."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_agents = fake_home / ".claude" / "agents"
+        claude_agents.mkdir(parents=True)
+        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
+        copilot_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (both paths auto-discovered)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered source directory' in captured.out
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_slash_command_paths(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery uses config type for path resolution."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_commands = fake_home / ".claude" / "commands"
+        claude_commands.mkdir(parents=True)
+        copilot_prompts = fake_home / ".config" / "Code" / "User" / "prompts"
+        copilot_prompts.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--config-type', 'slash-command',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed with command-specific paths
+        assert result == 0
+        captured = capsys.readouterr()
+        # Verify the correct subdirectories are used
+        assert 'commands' in captured.out or 'prompts' in captured.out
+
+    def test_autodiscover_permission_paths(self, tmp_path, monkeypatch, capsys):
+        """Test auto-discovery for permission config type."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_root = fake_home / ".claude"
+        claude_root.mkdir(parents=True)
+        copilot_root = fake_home / ".config" / "Code" / "User"
+        copilot_root.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--config-type', 'permission',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed (permissions use root dirs)
+        assert result == 0
+        captured = capsys.readouterr()
+        assert 'Auto-discovered source directory' in captured.out
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_gemini_unsupported_config_type(self, tmp_path, monkeypatch, capsys):
+        """Test error when auto-discovering path for unsupported config type."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        gemini_dir = fake_home / ".gemini"
+        gemini_dir.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        # Gemini doesn't support agents
+        result = main([
+            '--source-format', 'gemini',
+            '--target-format', 'claude',
+            '--config-type', 'agent',
+            '--dry-run'
+        ])
+        
+        assert result != 0
+        captured = capsys.readouterr()
+        assert 'Cannot auto-discover' in captured.err or 'does not support' in captured.err
+
+    def test_explicit_dir_overrides_autodiscover(self, tmp_path, monkeypatch, capsys):
+        """Test explicit --source-dir overrides auto-discovery."""
+        # Create a fake home directory structure
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        
+        # Create explicit source directory
+        explicit_source = tmp_path / "explicit-source"
+        explicit_source.mkdir()
+        
+        # Create copilot target directory parent
+        copilot_agents = fake_home / ".config" / "Code" / "User"
+        copilot_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-dir', str(explicit_source),
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run',
+            '--verbose'
+        ])
+        
+        # Should succeed using explicit source
+        assert result == 0
+        captured = capsys.readouterr()
+        # Source should NOT be auto-discovered since it was explicit
+        assert 'Auto-discovered source directory' not in captured.out
+        # Target should be auto-discovered
+        assert 'Auto-discovered target directory' in captured.out
+
+    def test_autodiscover_nonexistent_source_errors(self, tmp_path, monkeypatch, capsys):
+        """Test error when auto-discovered source directory doesn't exist."""
+        # Create a fake home directory with NO claude directory
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        
+        # Create copilot target directory  
+        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
+        copilot_agents.mkdir(parents=True)
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot',
+            '--dry-run'
+        ])
+        
+        # Should fail because auto-discovered source doesn't exist
+        assert result != 0
+        captured = capsys.readouterr()
+        assert 'does not exist' in captured.err
+
+    def test_format_only_usage_pattern(self, tmp_path, monkeypatch, capsys):
+        """Test the main use case: format-only invocation."""
+        # Create complete fake home environment
+        fake_home = tmp_path / "home"
+        fake_home.mkdir()
+        claude_agents = fake_home / ".claude" / "agents"
+        claude_agents.mkdir(parents=True)
+        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
+        copilot_agents.mkdir(parents=True)
+        
+        # Create a test agent file
+        (claude_agents / "test-agent.md").write_text("""---
+name: test-agent
+description: Test agent
+---
+Test instructions.
+""")
+        
+        # Mock Path.home() to return fake home
+        monkeypatch.setattr(Path, 'home', lambda: fake_home)
+        
+        # The format-only invocation pattern
+        result = main([
+            '--source-format', 'claude',
+            '--target-format', 'copilot'
+        ])
+        
+        # Should succeed and sync the file
+        assert result == 0
+        
+        # Verify file was created
+        assert (copilot_agents / "test-agent.agent.md").exists()
