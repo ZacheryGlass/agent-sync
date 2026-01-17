@@ -47,6 +47,13 @@ def parse_yaml_frontmatter(content: str) -> Tuple[dict, str]:
         >>> body
         'Agent instructions'
     """
+    # Check for empty content first
+    if not content or not content.strip():
+        raise ValueError("File is empty")
+
+    # Normalize line endings (Windows CRLF -> Unix LF)
+    content = content.replace('\r\n', '\n')
+
     match = re.match(r'^---\n(.*?)\n---\n(.*)$', content, re.DOTALL)
     if not match:
         raise ValueError("No YAML frontmatter found")

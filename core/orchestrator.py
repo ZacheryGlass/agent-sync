@@ -296,19 +296,26 @@ class UniversalSyncOrchestrator:
         for file_path in self.source_dir.glob(source_pattern):
             if not self.source_adapter.can_handle(file_path):
                 continue
-            
+
             original_base_name = self._extract_base_name(file_path, source_extension)
             match_name = original_base_name.lower()
-            
+
             if match_name in files_by_match_name:
                 existing_path = files_by_match_name[match_name]['source_path']
                 if existing_path:
                     self.log(f"Warning: Base name collision: '{file_path.name}' and '{existing_path.name}' both map to '{match_name}'. Skipping '{file_path.name}'.")
                     continue
 
+            # Handle race condition: file may be deleted between glob and stat
+            try:
+                source_mtime = file_path.stat().st_mtime
+            except FileNotFoundError:
+                self.log(f"Warning: File disappeared during discovery: {file_path}")
+                continue
+
             files_by_match_name[match_name] = {
                 'source_path': file_path,
-                'source_mtime': file_path.stat().st_mtime,
+                'source_mtime': source_mtime,
                 'target_path': None,
                 'target_mtime': None
             }
@@ -319,24 +326,31 @@ class UniversalSyncOrchestrator:
         for file_path in self.target_dir.glob(target_pattern):
             if not self.target_adapter.can_handle(file_path):
                 continue
-            
+
             original_base_name = self._extract_base_name(file_path, target_extension)
             match_name = original_base_name.lower()
-            
+
+            # Handle race condition: file may be deleted between glob and stat
+            try:
+                target_mtime = file_path.stat().st_mtime
+            except FileNotFoundError:
+                self.log(f"Warning: File disappeared during discovery: {file_path}")
+                continue
+
             if match_name in files_by_match_name:
                 if files_by_match_name[match_name]['target_path']:
                     existing_path = files_by_match_name[match_name]['target_path']
                     self.log(f"Warning: Base name collision in target: '{file_path.name}' and '{existing_path.name}' both map to '{match_name}'. Skipping '{file_path.name}'.")
                     continue
-                    
+
                 files_by_match_name[match_name]['target_path'] = file_path
-                files_by_match_name[match_name]['target_mtime'] = file_path.stat().st_mtime
+                files_by_match_name[match_name]['target_mtime'] = target_mtime
             else:
                 files_by_match_name[match_name] = {
                     'source_path': None,
                     'source_mtime': None,
                     'target_path': file_path,
-                    'target_mtime': file_path.stat().st_mtime
+                    'target_mtime': target_mtime
                 }
 
         # Convert to FilePair list, sorted by match name for consistency

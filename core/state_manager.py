@@ -107,8 +107,11 @@ class SyncStateManager:
                 json.dump(self.state, tf, indent=2)
                 temp_path = Path(tf.name)
 
-            # Set permissions to read/write for owner only
-            os.chmod(temp_path, 0o600)
+            # Set permissions to read/write for owner only (skip on Windows where it's unsupported)
+            try:
+                os.chmod(temp_path, 0o600)
+            except OSError:
+                pass  # Windows doesn't support Unix-style permissions
 
             # Atomic rename
             temp_path.replace(self.state_file)
