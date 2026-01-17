@@ -1042,14 +1042,16 @@ def sync_all_config_types(
         return {}
 
     # 2. Count files per config type for preview
+    # Do directory scans once, outside the loop
+    source_counts = format_registry.detect_config_types_in_directory(
+        source_dir, source_format
+    )
+    target_counts = format_registry.detect_config_types_in_directory(
+        target_dir, target_format
+    )
+
     file_counts: Dict[ConfigType, int] = {}
     for ct in config_types:
-        source_counts = format_registry.detect_config_types_in_directory(
-            source_dir, source_format
-        )
-        target_counts = format_registry.detect_config_types_in_directory(
-            target_dir, target_format
-        )
         # Count is max of source and target (either may have files to sync)
         file_counts[ct] = max(
             source_counts.get(ct, 0),

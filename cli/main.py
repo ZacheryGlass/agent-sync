@@ -52,6 +52,9 @@ ONLY_TYPE_MAP = {
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 
+# Default config type when not specified (used for single-file modes)
+DEFAULT_CONFIG_TYPE = 'agent'
+
 
 VERSION = "1.1.0"
 
@@ -372,8 +375,8 @@ def convert_single_file(args) -> int:
             print(f"Error: Cannot auto-detect format for: {source_file}", file=sys.stderr)
             return 1
 
-    # 3. Get config type (default to 'agent' for single-file conversion)
-    config_type_str = args.config_type or 'agent'
+    # 3. Get config type (default for single-file conversion)
+    config_type_str = args.config_type or DEFAULT_CONFIG_TYPE
     config_type = CONFIG_TYPE_MAP[config_type_str]
 
     # 4. Determine target adapter (explicit or from output extension)
@@ -535,8 +538,8 @@ def main(argv: Optional[list] = None):
                 print(f"Error: Target file does not exist: {target_file}", file=sys.stderr)
                 return EXIT_ERROR
 
-            # Get config type (default to 'agent' for in-place sync)
-            config_type_str = args.config_type or 'agent'
+            # Get config type (default for in-place sync)
+            config_type_str = args.config_type or DEFAULT_CONFIG_TYPE
             config_type = CONFIG_TYPE_MAP[config_type_str]
 
             # Setup registry
