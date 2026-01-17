@@ -2378,7 +2378,7 @@ class TestSyncFileCLI:
             '--sync-file', str(source_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2394,7 +2394,7 @@ class TestSyncFileCLI:
         result = main([
             '--sync-file', str(source_file),
             '--target-file', str(target_file),
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2412,7 +2412,7 @@ class TestSyncFileCLI:
             '--source-dir', str(tmp_path),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2429,7 +2429,7 @@ class TestSyncFileCLI:
             '--target-file', str(target_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_SUCCESS
@@ -2451,7 +2451,7 @@ class TestSyncFileCLI:
             '--target-file', str(target_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--bidirectional'
         ])
 
@@ -2476,7 +2476,7 @@ class TestSyncFileCLI:
             '--target-file', str(target_file),
             '--source-format', 'claude',
             '--target-format', 'claude',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
 
         assert result == EXIT_ERROR
@@ -2640,7 +2640,7 @@ class TestOrchestratorWarningAccumulation:
             '--target-dir', str(target_dir),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--strict'
         ])
 
@@ -2668,7 +2668,7 @@ class TestOrchestratorWarningAccumulation:
             '--target-dir', str(target_dir),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--strict'
         ])
 

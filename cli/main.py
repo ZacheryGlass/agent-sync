@@ -12,7 +12,7 @@ between different AI coding tools. It supports:
 Usage:
     python -m cli.main --source-dir ~/.claude/agents --target-dir .github/agents \
                        --source-format claude --target-format copilot \
-                       --config-type agent --direction both
+                       --direction both
 """
 
 import argparse
@@ -29,13 +29,6 @@ from core.profile_paths import ProfilePathResolver
 
 # Import adapters
 from adapters import ClaudeAdapter, CopilotAdapter, GeminiAdapter
-
-# Mapping from CLI string to ConfigType enum (single source of truth)
-CONFIG_TYPE_MAP = {
-    'agent': ConfigType.AGENT,
-    'permission': ConfigType.PERMISSION,
-    'slash-command': ConfigType.SLASH_COMMAND
-}
 
 # Mapping from --only shorthand values to ConfigType enum
 # Accepts both singular and plural forms for user convenience
@@ -54,10 +47,10 @@ EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 
 # Default config type when not specified (used for single-file modes)
-DEFAULT_CONFIG_TYPE = 'agent'
+DEFAULT_CONFIG_TYPE = ConfigType.AGENT
 
 
-VERSION = "1.1.0"
+VERSION = "2.0.0"
 
 
 def _build_conversion_options(args: argparse.Namespace) -> dict:
@@ -139,25 +132,24 @@ Examples:
   # Auto-discover profile paths (format-only, directories auto-resolved)
   %(prog)s --source-format claude --target-format copilot
 
-  # Sync Claude agents to Copilot
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
-           --source-format claude --target-format copilot \
-           --config-type agent
+  # Sync Claude agents to Copilot (auto-detects all config types)
+  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
+           --source-format claude --target-format copilot
 
-  # Sync Claude permissions to Copilot
-  %(prog)s --source-dir ~/.claude --target-dir .github \
-           --source-format claude --target-format copilot \
-           --config-type permission
+  # Sync only agents (skip permissions and commands)
+  %(prog)s --source-dir ~/.claude --target-dir .github \\
+           --source-format claude --target-format copilot \\
+           --only agents
 
-  # Sync Gemini custom commands to Copilot
-  %(prog)s --source-dir ~/.gemini/commands --target-dir .github/prompts \
-           --source-format gemini --target-format copilot \
-           --config-type slash-command
+  # Sync only permissions
+  %(prog)s --source-dir ~/.claude --target-dir .github \\
+           --source-format claude --target-format copilot \\
+           --only permissions
 
-  # Sync Copilot prompts to Gemini custom commands
-  %(prog)s --source-dir .github/prompts --target-dir ~/.gemini/commands \
-           --source-format copilot --target-format gemini \
-           --config-type slash-command
+  # Sync only commands
+  %(prog)s --source-dir ~/.gemini/commands --target-dir .github/prompts \\
+           --source-format gemini --target-format copilot \\
+           --only commands
 
   # Single file conversion (auto-detect source, auto-generate output)
   %(prog)s --convert-file ~/.claude/agents/planner.md --target-format copilot
@@ -166,23 +158,23 @@ Examples:
   %(prog)s --convert-file agent.md --output agent.agent.md --target-format copilot
 
   # Bidirectional sync with dry-run
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
-           --source-format claude --target-format copilot \
-           --config-type agent --direction both --dry-run
+  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
+           --source-format claude --target-format copilot \\
+           --direction both --dry-run
 
   # Sync only agents and commands (skip permissions)
-  %(prog)s --source-dir ~/.claude --target-dir .github \
-           --source-format claude --target-format copilot \
+  %(prog)s --source-dir ~/.claude --target-dir .github \\
+           --source-format claude --target-format copilot \\
            --only agents,commands
 
   # Skip confirmation prompts (for CI/scripts)
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \
-           --source-format claude --target-format copilot \
+  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
+           --source-format claude --target-format copilot \\
            --yes
 
   # Combine --only with --yes for automated multi-type sync
-  %(prog)s --source-dir ~/.claude --target-dir .github \
-           --source-format claude --target-format copilot \
+  %(prog)s --source-dir ~/.claude --target-dir .github \\
+           --source-format claude --target-format copilot \\
            --only agents,permissions --yes --dry-run
 
   # Disable auto-discovery (require explicit paths)
@@ -257,14 +249,6 @@ Examples:
     )
 
     # Optional arguments
-    parser.add_argument(
-        '--config-type',
-        type=str,
-        default=None,
-        choices=['agent', 'permission', 'slash-command'],
-        help='Type of configuration to sync. If omitted, auto-detects and syncs all available types.'
-    )
-
     parser.add_argument(
         '--direction',
         type=str,
@@ -389,9 +373,19 @@ def convert_single_file(args) -> int:
             print(f"Error: Cannot auto-detect format for: {source_file}", file=sys.stderr)
             return 1
 
-    # 3. Get config type (default for single-file conversion)
-    config_type_str = args.config_type or DEFAULT_CONFIG_TYPE
-    config_type = CONFIG_TYPE_MAP[config_type_str]
+    # 3. Get config type (from --only or default for single-file conversion)
+    if args.only:
+        try:
+            config_types = _parse_only_types(args.only)
+            if len(config_types) != 1:
+                print("Error: --only must specify exactly one type for single-file conversion", file=sys.stderr)
+                return EXIT_ERROR
+            config_type = config_types[0]
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return EXIT_ERROR
+    else:
+        config_type = DEFAULT_CONFIG_TYPE
 
     # 4. Determine target adapter (explicit or from output extension)
     if args.target_format:
@@ -552,9 +546,19 @@ def main(argv: Optional[list] = None):
                 print(f"Error: Target file does not exist: {target_file}", file=sys.stderr)
                 return EXIT_ERROR
 
-            # Get config type (default for in-place sync)
-            config_type_str = args.config_type or DEFAULT_CONFIG_TYPE
-            config_type = CONFIG_TYPE_MAP[config_type_str]
+            # Get config type (from --only or default for in-place sync)
+            if args.only:
+                try:
+                    config_types = _parse_only_types(args.only)
+                    if len(config_types) != 1:
+                        print("Error: --only must specify exactly one type for in-place sync", file=sys.stderr)
+                        return EXIT_ERROR
+                    config_type = config_types[0]
+                except ValueError as e:
+                    print(f"Error: {e}", file=sys.stderr)
+                    return EXIT_ERROR
+            else:
+                config_type = DEFAULT_CONFIG_TYPE
 
             # Setup registry
             registry = setup_registry()
@@ -623,38 +627,6 @@ def main(argv: Optional[list] = None):
         print("Error: --target-format is required for directory sync", file=sys.stderr)
         return EXIT_ERROR
 
-    # Auto-discover paths if not explicitly provided
-    profile_resolver = ProfilePathResolver()
-    
-    # Determine effective config type for path resolution
-    effective_config_type = CONFIG_TYPE_MAP[args.config_type]
-    
-    if args.source_dir is None:
-        if args.no_autodiscover:
-            print("Error: --source-dir required when --no-autodiscover is set", file=sys.stderr)
-            return EXIT_ERROR
-        # Auto-resolve from format and config type
-        try:
-            args.source_dir = profile_resolver.get_config_subdir(args.source_format, effective_config_type)
-            if args.verbose:
-                print(f"Auto-discovered source directory: {args.source_dir}")
-        except ValueError as e:
-            print(f"Error: Cannot auto-discover source path: {e}", file=sys.stderr)
-            return EXIT_ERROR
-
-    if args.target_dir is None:
-        if args.no_autodiscover:
-            print("Error: --target-dir required when --no-autodiscover is set", file=sys.stderr)
-            return EXIT_ERROR
-        # Auto-resolve from format and config type
-        try:
-            args.target_dir = profile_resolver.get_config_subdir(args.target_format, effective_config_type)
-            if args.verbose:
-                print(f"Auto-discovered target directory: {args.target_dir}")
-        except ValueError as e:
-            print(f"Error: Cannot auto-discover target path: {e}", file=sys.stderr)
-            return EXIT_ERROR
-
     # Parse and validate --only if provided
     only_config_types = None
     if args.only is not None:
@@ -667,13 +639,47 @@ def main(argv: Optional[list] = None):
             print(f"Error: {e}", file=sys.stderr)
             return EXIT_ERROR
 
-    # Warn if both --only and --config-type are specified
-    if args.only is not None and args.config_type is not None:
-        print(
-            f"Warning: Both --only and --config-type specified. "
-            f"--only takes precedence, ignoring --config-type '{args.config_type}'.",
-            file=sys.stderr
-        )
+    # Auto-discover paths if not explicitly provided
+    profile_resolver = ProfilePathResolver()
+    
+    # Determine whether to use profile-level path or config-type-specific subdirectory
+    # - If --only specifies a single type, use the subdirectory for that type
+    # - If --only is not specified (multi-config mode), use profile-level path for auto-detection
+    use_profile_level = (only_config_types is None) or (len(only_config_types) > 1)
+    
+    if args.source_dir is None:
+        if args.no_autodiscover:
+            print("Error: --source-dir required when --no-autodiscover is set", file=sys.stderr)
+            return EXIT_ERROR
+        # Auto-resolve from format
+        try:
+            if use_profile_level:
+                args.source_dir = profile_resolver.get_profile_path(args.source_format)
+            else:
+                # Single config type specified via --only
+                args.source_dir = profile_resolver.get_config_subdir(args.source_format, only_config_types[0])
+            if args.verbose:
+                print(f"Auto-discovered source directory: {args.source_dir}")
+        except ValueError as e:
+            print(f"Error: Cannot auto-discover source path: {e}", file=sys.stderr)
+            return EXIT_ERROR
+
+    if args.target_dir is None:
+        if args.no_autodiscover:
+            print("Error: --target-dir required when --no-autodiscover is set", file=sys.stderr)
+            return EXIT_ERROR
+        # Auto-resolve from format
+        try:
+            if use_profile_level:
+                args.target_dir = profile_resolver.get_profile_path(args.target_format)
+            else:
+                # Single config type specified via --only
+                args.target_dir = profile_resolver.get_config_subdir(args.target_format, only_config_types[0])
+            if args.verbose:
+                print(f"Auto-discovered target directory: {args.target_dir}")
+        except ValueError as e:
+            print(f"Error: Cannot auto-discover target path: {e}", file=sys.stderr)
+            return EXIT_ERROR
 
     try:
         # 1. Expand and validate paths
@@ -715,9 +721,8 @@ def main(argv: Optional[list] = None):
 
         # 5. Determine operating mode
         # - If --only is provided, sync those specific types
-        # - If --config-type is provided, sync that single type
-        # - If neither is provided, auto-detect and sync all available types
-        use_multi_config_mode = (args.config_type is None and args.only is None)
+        # - If --only is not provided, auto-detect and sync all available types
+        use_multi_config_mode = (args.only is None)
 
         if use_multi_config_mode:
             # Multi-config mode: auto-detect and sync all available types
@@ -756,12 +761,8 @@ def main(argv: Optional[list] = None):
 
             return EXIT_SUCCESS
 
-        # Single-type or explicit --only mode
-        if only_config_types:
-            config_types_to_sync = only_config_types
-        else:
-            # args.config_type is provided
-            config_types_to_sync = [CONFIG_TYPE_MAP[args.config_type]]
+        # Explicit --only mode
+        config_types_to_sync = only_config_types
 
         # Track overall results
         all_warnings = []

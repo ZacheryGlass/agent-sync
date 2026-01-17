@@ -70,7 +70,7 @@ class TestCLIImprovements:
                 result = main([
                     '--convert-file', str(source_file),
                     '--target-format', 'copilot',
-                    '--config-type', 'agent'
+                    '--only', 'agents'
                 ])
                 assert result == EXIT_SUCCESS
                 assert (tmp_path / "my-agent.agent.md").exists()
@@ -87,7 +87,7 @@ class TestCLIImprovements:
                 result = main([
                     '--convert-file', str(source_file),
                     '--target-format', 'copilot',
-                    '--config-type', 'permission'
+                    '--only', 'permissions'
                 ])
                 assert result == EXIT_SUCCESS
                 assert (tmp_path / "settings.perm.json").exists()
@@ -104,7 +104,7 @@ class TestCLIImprovements:
                 result = main([
                     '--convert-file', str(source_file),
                     '--target-format', 'copilot',
-                    '--config-type', 'slash-command'
+                    '--only', 'commands'
                 ])
                 assert result == EXIT_SUCCESS
                 assert (tmp_path / "command.prompt.md").exists()
@@ -122,7 +122,7 @@ class TestCLIImprovements:
                 result = main([
                     '--convert-file', str(source_file),
                     '--target-format', 'claude',
-                    '--config-type', 'agent'
+                    '--only', 'agents'
                 ])
                 assert result == EXIT_SUCCESS
                 assert (tmp_path / "test.md").exists()
@@ -135,7 +135,7 @@ class TestCLIImprovements:
                 result = main([
                     '--convert-file', str(source_file),
                     '--target-format', 'claude',
-                    '--config-type', 'slash-command'
+                    '--only', 'commands'
                 ])
                 assert result == EXIT_SUCCESS
                 assert (tmp_path / "cmd.md").exists()
@@ -179,7 +179,7 @@ class TestCLIImprovements:
                         '--target-dir', str(target_dir),
                         '--source-format', 'claude',
                         '--target-format', 'copilot',
-                        '--config-type', 'agent'  # Explicit config type to use single-type mode
+                        '--only', 'agents'  # Explicit config type to use single-type mode
                     ])
                 
                 output = f.getvalue()

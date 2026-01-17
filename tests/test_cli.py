@@ -105,17 +105,6 @@ class TestCLIArgumentParsing:
             ])
             assert args.target_format == fmt
 
-    def test_config_type_default(self, parser, base_args):
-        """Test --config-type defaults to None (auto-detect mode)."""
-        args = parser.parse_args(base_args)
-        assert args.config_type is None
-
-    def test_config_type_choices(self, parser, base_args):
-        """Test --config-type accepts 'agent', 'permission', 'slash-command'."""
-        for config_type in ['agent', 'permission', 'slash-command']:
-            args = parser.parse_args(base_args + ['--config-type', config_type])
-            assert args.config_type == config_type
-
     def test_direction_default(self, parser, base_args):
         """Test --direction defaults to 'both'."""
         args = parser.parse_args(base_args)
@@ -304,7 +293,7 @@ class TestErrorHandling:
                 '--target-dir', str(target),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'agent'  # Explicit config type to use single-type mode
+                '--only', 'agents'  # Explicit config type to use single-type mode
             ])
             # CLI should propagate orchestrator errors with non-zero exit
             assert result != 0
@@ -326,7 +315,7 @@ class TestErrorHandling:
             '--target-dir', str(target),
             '--source-format', 'gemini',
             '--target-format', 'copilot',
-            '--config-type', 'agent'
+            '--only', 'agents'
         ])
         
         assert result != 0
@@ -340,7 +329,7 @@ class TestErrorHandling:
             '--target-dir', str(target),
             '--source-format', 'copilot',
             '--target-format', 'gemini',
-            '--config-type', 'permission'
+            '--only', 'permissions'
         ])
         
         assert result != 0
@@ -421,13 +410,13 @@ class TestSyncInvocation:
             # TODO: When implemented, verify target_format='copilot' passed
 
     def test_orchestrator_receives_config_type(self, base_args):
-        """Orchestrator constructed with correct ConfigType enum."""
+        """Orchestrator constructed with correct ConfigType enum via --only."""
         with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            # Test with explicit config type
-            main(base_args + ['--config-type', 'agent'])
+            # Test with explicit config type via --only
+            main(base_args + ['--only', 'agents'])
 
             # TODO: When implemented, verify ConfigType.AGENT passed
 
@@ -623,7 +612,7 @@ Instructions.
         # Record initial state of target directory
         initial_files = list(valid_target_dir.iterdir())
 
-        main(base_args + ['--dry-run', '--config-type', 'agent'])
+        main(base_args + ['--dry-run', '--only', 'agents'])
 
         # Target directory should be unchanged
         final_files = list(valid_target_dir.iterdir())
@@ -631,7 +620,7 @@ Instructions.
 
     def test_dry_run_outputs_preview(self, base_args, capsys):
         """Dry-run outputs what would be done."""
-        main(base_args + ['--dry-run', '--config-type', 'agent'])
+        main(base_args + ['--dry-run', '--only', 'agents'])
 
         captured = capsys.readouterr()
         # Should output something related to dry-run mode
@@ -940,13 +929,13 @@ Test instructions.
         assert 'test-agent' in content
 
     def test_config_type_specified_for_conversion(self, valid_source_file, valid_output_file):
-        """--config-type can be specified for file conversion."""
+        """--only can be specified for file conversion (single type)."""
         result = main([
             '--convert-file', str(valid_source_file),
             '--output', str(valid_output_file),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'agent'
+            '--only', 'agents'
         ])
         assert result == 0
 
@@ -998,13 +987,13 @@ class TestCLIPermissionSupport:
             '--target-format', 'copilot'
         ]
 
-    def test_config_type_permission_argument(self, base_args):
-        """Test --config-type permission is accepted."""
+    def test_only_permission_argument(self, base_args):
+        """Test --only permissions is accepted."""
         with patch.object(sys.modules['cli.main'], 'UniversalSyncOrchestrator') as mock_orch:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            result = main(base_args + ['--config-type', 'permission'])
+            result = main(base_args + ['--only', 'permissions'])
             
             assert result == 0
             # Verify correct ConfigType enum passed
@@ -1012,7 +1001,7 @@ class TestCLIPermissionSupport:
             assert call_kwargs['config_type'] == ConfigType.PERMISSION
 
     def test_permission_file_conversion(self, tmp_path):
-        """Test --config-type permission with single file conversion."""
+        """Test --only permissions with single file conversion."""
         source_file = tmp_path / "settings.json"
         source_file.write_text("{}")
         
@@ -1041,7 +1030,7 @@ class TestCLIPermissionSupport:
                 '--convert-file', str(source_file),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'permission'
+                '--only', 'permissions'
             ])
 
             assert result == 0
@@ -1060,7 +1049,7 @@ class TestCLIPermissionSupport:
             # Simulate orchestrator raising ValueError for unsupported config type
             mock_orch.side_effect = ValueError("Format 'copilot' does not support permission")
             
-            result = main(base_args + ['--config-type', 'permission'])
+            result = main(base_args + ['--only', 'permissions'])
             
             assert result != 0
 
@@ -1070,7 +1059,7 @@ class TestCLIPermissionSupport:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            result = main(base_args + ['--config-type', 'permission', '--dry-run'])
+            result = main(base_args + ['--only', 'permissions', '--dry-run'])
 
             assert result == 0
             call_kwargs = mock_orch.call_args.kwargs
@@ -1114,7 +1103,7 @@ class TestCLIPermissionSupport:
                 '--convert-file', str(source_file),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'permission',
+                '--only', 'permissions',
                 '--strict'
             ])
 
@@ -1157,7 +1146,7 @@ class TestCLIPermissionSupport:
                 '--convert-file', str(source_file),
                 '--source-format', 'claude',
                 '--target-format', 'copilot',
-                '--config-type', 'permission',
+                '--only', 'permissions',
                 '--strict'
             ])
 
@@ -1183,7 +1172,7 @@ class TestCLIPermissionSupport:
             '--target-dir', str(target_dir),
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--strict'
         ])
 
@@ -1212,7 +1201,7 @@ class TestCLIGeminiIntegration:
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
         assert args.source_format == 'gemini'
 
@@ -1229,7 +1218,7 @@ class TestCLIGeminiIntegration:
             '--target-dir', str(gemini_dir),
             '--source-format', 'claude',
             '--target-format', 'gemini',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
         assert args.target_format == 'gemini'
 
@@ -1255,7 +1244,7 @@ Test instructions.
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Verify success
@@ -1278,7 +1267,7 @@ Single file conversion test.
             '--convert-file', str(gemini_file),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--output', str(output_file)
         ])
 
@@ -1302,7 +1291,7 @@ Auto-detection test.
         result = main([
             '--convert-file', str(gemini_file),
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Should succeed with auto-detection
@@ -1330,7 +1319,7 @@ Dry-run test.
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--dry-run'
         ])
 
@@ -1369,7 +1358,7 @@ Claude command.
             '--target-dir', str(claude_dir),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--bidirectional'
         ])
 
@@ -1390,7 +1379,7 @@ Claude command.
             '--convert-file', str(gemini_file),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Should fail with non-zero exit code
@@ -1407,7 +1396,7 @@ Claude command.
             '--convert-file', str(gemini_file),
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Should fail with non-zero exit code
@@ -1439,7 +1428,7 @@ Create a git commit.
             '--target-dir', str(copilot_dir),
             '--source-format', 'gemini',
             '--target-format', 'copilot',
-            '--config-type', 'slash-command'
+            '--only', 'commands'
         ])
 
         # Verify success
@@ -1500,13 +1489,6 @@ class TestOnlyFlag:
         assert result != 0
         captured = capsys.readouterr()
         assert 'invalid' in captured.err.lower()
-
-    def test_only_takes_precedence_over_config_type(self, base_args, capsys):
-        """Test --only takes precedence with warning when both specified."""
-        result = main(base_args + ['--only', 'commands', '--config-type', 'permission'])
-        captured = capsys.readouterr()
-        assert 'warning' in captured.err.lower()
-        assert 'precedence' in captured.err.lower()
 
     def test_only_accepts_singular_forms(self, parser, base_args):
         """Test --only accepts singular form (agent vs agents)."""
@@ -1573,7 +1555,7 @@ class TestYesFlag:
             mock_instance = MagicMock()
             mock_orch.return_value = mock_instance
 
-            main(base_args + ['--yes', '--config-type', 'agent'])
+            main(base_args + ['--yes', '--only', 'agents'])
 
             # Verify orchestrator was called with auto_confirm=True
             call_kwargs = mock_orch.call_args.kwargs
@@ -1583,7 +1565,7 @@ class TestYesFlag:
         """Test --yes does not prompt for input (doesn't hang on input())."""
         # This test verifies that with --yes, the sync completes without
         # calling input() which would hang in non-interactive mode
-        result = main(base_args + ['--yes', '--config-type', 'agent'])
+        result = main(base_args + ['--yes', '--only', 'agents'])
         assert result == 0
 
     def test_only_and_yes_combined(self, base_args):
@@ -1743,7 +1725,7 @@ class TestAutoDiscovery:
         result = main([
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'slash-command',
+            '--only', 'commands',
             '--dry-run',
             '--verbose'
         ])
@@ -1770,7 +1752,7 @@ class TestAutoDiscovery:
         result = main([
             '--source-format', 'claude',
             '--target-format', 'copilot',
-            '--config-type', 'permission',
+            '--only', 'permissions',
             '--dry-run',
             '--verbose'
         ])
@@ -1796,7 +1778,7 @@ class TestAutoDiscovery:
         result = main([
             '--source-format', 'gemini',
             '--target-format', 'claude',
-            '--config-type', 'agent',
+            '--only', 'agents',
             '--dry-run'
         ])
         
@@ -1882,10 +1864,11 @@ Test instructions.
         # Mock Path.home() to return fake home
         monkeypatch.setattr(Path, 'home', lambda: fake_home)
         
-        # The format-only invocation pattern
+        # The format-only invocation pattern (--yes to skip confirmation)
         result = main([
             '--source-format', 'claude',
-            '--target-format', 'copilot'
+            '--target-format', 'copilot',
+            '--yes'
         ])
         
         # Should succeed and sync the file
