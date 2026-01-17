@@ -2877,7 +2877,8 @@ description: Good agent
 Instructions.
 """)
 
-        # Create invalid permission file (will fail to parse)
+        # Create invalid permission file (settings.json is Claude's permission file format)
+        # Invalid JSON will fail to parse during sync
         (source_dir / "settings.json").write_text("invalid json {{{")
 
         output_lines = []
