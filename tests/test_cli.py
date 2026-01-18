@@ -1851,8 +1851,9 @@ class TestAutoDiscovery:
         fake_home.mkdir()
         claude_agents = fake_home / ".claude" / "agents"
         claude_agents.mkdir(parents=True)
-        copilot_agents = fake_home / ".config" / "Code" / "User" / "agents"
-        copilot_agents.mkdir(parents=True)
+        # VS Code uses prompts/ for both agents and slash commands at user-level
+        copilot_prompts = fake_home / ".config" / "Code" / "User" / "prompts"
+        copilot_prompts.mkdir(parents=True)
 
         # Create a test agent file
         (claude_agents / "test-agent.md").write_text("""---
@@ -1879,5 +1880,5 @@ Test instructions.
         # Should succeed and sync the file
         assert result == 0
 
-        # Verify file was created
-        assert (copilot_agents / "test-agent.agent.md").exists()
+        # Verify file was created in prompts/ (VS Code's user-level location)
+        assert (copilot_prompts / "test-agent.agent.md").exists()

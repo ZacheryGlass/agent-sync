@@ -47,8 +47,8 @@ class CopilotAdapter(FormatAdapter):
         return self.file_extension
 
     def get_config_subdir(self, config_type: ConfigType) -> Optional[str]:
-        """Copilot uses 'prompts' for slash commands instead of 'commands'."""
-        if config_type == ConfigType.SLASH_COMMAND:
+        """Copilot uses 'prompts' folder for both agents and slash commands at user-level."""
+        if config_type in (ConfigType.SLASH_COMMAND, ConfigType.AGENT):
             return "prompts"
         return super().get_config_subdir(config_type)
 

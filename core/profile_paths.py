@@ -35,7 +35,7 @@ class ProfilePathResolver:
             ConfigType.PERMISSION: None,  # settings.json in root
         },
         'copilot': {
-            ConfigType.AGENT: 'agents',
+            ConfigType.AGENT: 'prompts',  # VS Code uses prompts/ for both agents and commands
             ConfigType.SLASH_COMMAND: 'prompts',
             ConfigType.PERMISSION: None,  # settings.json in root
         },

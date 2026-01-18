@@ -306,11 +306,11 @@ class TestDetectConfigTypesInDirectory:
         assert result == {}
 
     def test_detect_copilot_agents(self, registry, tmp_path):
-        """Test detection of Copilot agent files."""
-        agents_dir = tmp_path / 'agents'
-        agents_dir.mkdir()
-        (agents_dir / 'agent1.agent.md').write_text('---\nname: a1\n---\n')
-        (agents_dir / 'agent2.agent.md').write_text('---\nname: a2\n---\n')
+        """Test detection of Copilot agent files (VS Code uses prompts/ for agents)."""
+        prompts_dir = tmp_path / 'prompts'
+        prompts_dir.mkdir()
+        (prompts_dir / 'agent1.agent.md').write_text('---\nname: a1\n---\n')
+        (prompts_dir / 'agent2.agent.md').write_text('---\nname: a2\n---\n')
 
         result = registry.detect_config_types_in_directory(tmp_path, 'copilot')
 

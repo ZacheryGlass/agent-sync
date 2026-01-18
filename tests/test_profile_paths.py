@@ -150,9 +150,9 @@ class TestProfilePathResolver:
         assert path == resolver.get_claude_profile_path()
 
     def test_get_config_subdir_copilot_agent(self, resolver):
-        """Test Copilot agent subdirectory."""
+        """Test Copilot agent subdirectory (VS Code uses prompts/ for both)."""
         path = resolver.get_config_subdir('copilot', ConfigType.AGENT)
-        assert path == resolver.get_copilot_profile_path() / 'agents'
+        assert path == resolver.get_copilot_profile_path() / 'prompts'
 
     def test_get_config_subdir_copilot_slash_command(self, resolver):
         """Test Copilot slash command (prompts) subdirectory."""
