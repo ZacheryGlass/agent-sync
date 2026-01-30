@@ -44,29 +44,70 @@ python -m cli.main
 
 ## Usage
 
-Agent Sync is a Command Line Interface (CLI) tool.
+Agent Sync is a Command Line Interface (CLI) tool with subcommands for different operations.
 
-### CLI Mode
-
-The general syntax for the CLI is:
+### Quick Start
 
 ```bash
-agent-sync [options]
+# Sync configurations between Claude and Copilot
+agent-sync sync --source-format claude --target-format copilot
+
+# View available commands
+agent-sync --help
+
+# Get help for a specific command
+agent-sync sync --help
 ```
 
-### CLI Options
+### Available Commands
+
+- **`agent-sync sync`**: Run a one-off synchronization between formats (main command)
+- **`agent-sync init`**: Initialize agent-sync configuration (coming soon)
+- **`agent-sync watch`**: Watch and sync changes in real-time (coming soon)
+- **`agent-sync config`**: View or edit configuration (coming soon)
+
+### Sync Command
+
+The `sync` command is the primary tool for synchronizing configurations.
+
+#### Basic Syntax
+
+```bash
+agent-sync sync [options]
+```
+
+#### Common Examples
+
+```bash
+# Auto-discover profile paths and sync
+agent-sync sync --source-format claude --target-format copilot
+
+# Sync specific directories
+agent-sync sync --source-dir ~/.claude --target-dir .github \
+                --source-format claude --target-format copilot
+
+# Sync only agents (skip permissions and commands)
+agent-sync sync --source-dir ~/.claude --target-dir .github \
+                --source-format claude --target-format copilot --only agents
+
+# Single file conversion
+agent-sync sync --convert-file ~/.claude/agents/planner.md --target-format copilot
+
+# Dry-run (preview changes without applying)
+agent-sync sync --source-dir ~/.claude --target-dir .github \
+                --source-format claude --target-format copilot --dry-run
+```
+
+### Sync Options
 
 The tool offers various flags to customize the synchronization process.
 
 #### Core Configuration
 - **`--source-dir`**: Specifies the directory containing your source configuration files.
 - **`--target-dir`**: Specifies the directory where files should be synced to.
-- **`--source-format`**: Defines the format of the source files (`claude` or `copilot`).
-- **`--target-format`**: Defines the format for the destination files (`claude` or `copilot`).
-- **`--config-type`**: Determines what type of data is being synced. Options are:
-    - `agent`: For AI agent definitions.
-    - `permission`: For tool use permissions and settings.
-    - `slash-command`: For prompt and command definitions.
+- **`--source-format`**: Defines the format of the source files (`claude`, `copilot`, or `gemini`).
+- **`--target-format`**: Defines the format for the destination files (`claude`, `copilot`, or `gemini`).
+- **`--only`**: Filter to specific config types (comma-separated: `agents`, `commands`, `permissions`). By default, syncs all detected types.
 - **`--direction`**: Controls the synchronization flow.
     - `both`: Bidirectional sync (default).
     - `source-to-target`: One-way sync from source to target.
@@ -75,17 +116,35 @@ The tool offers various flags to customize the synchronization process.
 #### Operation Control
 - **`--dry-run`**: Simulates the operation and prints what would happen without modifying any files.
 - **`--force`**: Automatically resolves conflicts by choosing the newest file, bypassing interactive prompts.
+- **`--yes`, `-y`**: Skip confirmation prompts (useful for scripts/CI).
 - **`--state-file`**: Path to a custom state file (defaults to `~/.agent_sync_state.json`). This file tracks sync history.
 - **`--verbose`, `-v`**: Enables detailed logging output for debugging.
+- **`--strict`**: Error on lossy conversions (e.g., Claude deny rules downgraded to VS Code ask).
 
 #### Single File Operations
 - **`--convert-file`**: Path to a single file to convert. Mutually exclusive with directory options.
-- **`--output`**: Destination path for the single converted file.
+- **`--output`**: Destination path for the single converted file (auto-generated if not specified).
 - **`--sync-file`** & **`--target-file`**: Used for in-place merging of two specific files.
+- **`--bidirectional`**: Sync changes in both directions for in-place merge mode.
 
 #### Format-Specific Flags
-- **`--add-argument-hint`**: Adds an `argument-hint` field (useful for Copilot) based on the description when converting from Claude.
+- **`--add-argument-hint`**: Adds an `argument-hint` field (useful for Copilot) when converting from Claude.
 - **`--add-handoffs`**: Adds a `handoffs` placeholder field when converting to Copilot format.
+- **`--no-autodiscover`**: Disable auto-discovery; require explicit --source-dir and --target-dir.
+
+### Legacy Mode (Deprecated)
+
+The flat-argument style without subcommands is still supported for backward compatibility but will be removed in version 3.0:
+
+```bash
+# Old style (deprecated)
+agent-sync --source-format claude --target-format copilot
+
+# New style (recommended)
+agent-sync sync --source-format claude --target-format copilot
+```
+
+When using the old style, a deprecation warning is displayed.
 
 ## Configuration Details
 
