@@ -641,6 +641,10 @@ def main(argv: Optional[list] = None):
     parser = create_parser(registry)
     args = parser.parse_args(argv)
     
+    # Track which values came from CLI vs config for mutual exclusivity checks
+    cli_source_dir = args.source_dir is not None
+    cli_target_dir = args.target_dir is not None
+    
     # Merge config with CLI args (CLI args take priority)
     if config:
         # Apply config defaults only if not specified via CLI
@@ -677,16 +681,16 @@ def main(argv: Optional[list] = None):
 
     # Route to single-file conversion mode if --convert-file is specified
     if args.convert_file:
-        # Validate mutual exclusivity
-        if args.source_dir:
+        # Validate mutual exclusivity (only check if source_dir was explicitly provided via CLI)
+        if cli_source_dir:
             print("Error: --convert-file and --source-dir are mutually exclusive", file=sys.stderr)
             return EXIT_ERROR
         return convert_single_file(args)
 
     # Route to in-place file sync mode if --sync-file is specified
     if args.sync_file:
-        # Validate mutual exclusivity
-        if args.convert_file or args.source_dir or args.target_dir:
+        # Validate mutual exclusivity (only check if dirs were explicitly provided via CLI)
+        if args.convert_file or cli_source_dir or cli_target_dir:
             print("Error: --sync-file is mutually exclusive with --convert-file and directory sync", file=sys.stderr)
             return EXIT_ERROR
         if not args.target_file:
