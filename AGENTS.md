@@ -22,6 +22,9 @@ pip install -r requirements.txt
 ```
 
 ### CLI
+
+**Note:** The CLI now uses subcommands (v2.0+). The examples below use the legacy flat-argument style for backward compatibility, but the recommended syntax is `agent-sync sync [options]`. See README.md for the new subcommand syntax.
+
 ```bash
 # Universal sync between any formats (auto-detects all config types)
 python -m cli.main \
