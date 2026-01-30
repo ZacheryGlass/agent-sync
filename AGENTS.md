@@ -23,6 +23,15 @@ pip install -r requirements.txt
 
 ### CLI
 ```bash
+# Initialize configuration file (interactive setup)
+python -m cli.main init
+
+# Run sync with saved configuration (no arguments needed)
+python -m cli.main
+
+# Run sync with saved config and dry-run to preview changes
+python -m cli.main --dry-run
+
 # Universal sync between any formats (auto-detects all config types)
 python -m cli.main \
   --source-dir ~/.claude \
@@ -93,6 +102,52 @@ python -m cli.main \
   --convert-file ~/.gemini/commands/git/commit.toml \
   --target-format copilot \
   --output .github/prompts/git-commit.prompt.md
+```
+
+### Configuration File
+
+The `agent-sync init` command creates a configuration file at `~/.agent-sync.toml` that stores your preferences, eliminating the need for repetitive CLI flags.
+
+**Config file structure:**
+```toml
+# Core settings
+source_dir = "/home/user/.claude"
+target_dir = "/home/user/.github"
+source_format = "claude"
+target_format = "copilot"
+
+# Optional settings
+dry_run = false
+verbose = false
+force = false
+strict = false
+yes = false
+only = "agents,commands"
+direction = "both"
+state_file = "/home/user/.custom_state.json"
+add_argument_hint = false
+add_handoffs = false
+no_autodiscover = false
+```
+
+**Priority order (highest to lowest):**
+1. CLI flags (e.g., `--source-dir /custom/path`)
+2. Config file values (`~/.agent-sync.toml`)
+3. Built-in defaults
+
+**Example workflow:**
+```bash
+# One-time setup
+python -m cli.main init
+# Enter: claude, copilot, ~/.claude, .github
+
+# Daily usage (no flags needed!)
+python -m cli.main
+python -m cli.main --dry-run
+python -m cli.main --only agents
+
+# Override specific values when needed
+python -m cli.main --source-dir /different/path
 ```
 
 ### Testing

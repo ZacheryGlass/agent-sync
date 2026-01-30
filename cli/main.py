@@ -26,6 +26,7 @@ from core.orchestrator import UniversalSyncOrchestrator, sync_all_config_types
 from core.state_manager import SyncStateManager
 from core.canonical_models import ConfigType
 from core.profile_paths import ProfilePathResolver
+from cli.config import Config, load_config, save_config, validate_config, DEFAULT_CONFIG_PATH
 
 # Import adapters
 from adapters import ClaudeAdapter, CopilotAdapter, GeminiAdapter
@@ -112,6 +113,120 @@ def _parse_only_types(only_arg: str) -> List[ConfigType]:
     return config_types
 
 
+def run_init_command(registry: FormatRegistry) -> int:
+    """
+    Run interactive init command to create configuration file.
+    
+    Args:
+        registry: FormatRegistry for validating format choices
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    print("Agent-sync configuration wizard")
+    print("=" * 40)
+    print()
+    
+    # Check if config already exists
+    if DEFAULT_CONFIG_PATH.exists():
+        response = input(f"Config file already exists at {DEFAULT_CONFIG_PATH}. Overwrite? [y/N]: ").strip().lower()
+        if response not in ['y', 'yes']:
+            print("Aborted.")
+            return EXIT_SUCCESS
+        print()
+    
+    # Get available formats
+    formats = registry.list_formats()
+    
+    # Prompt for source format
+    print(f"Available formats: {', '.join(formats)}")
+    while True:
+        source_format = input("Source format: ").strip().lower()
+        if source_format in formats:
+            break
+        print(f"Invalid format. Choose from: {', '.join(formats)}")
+    
+    # Prompt for target format
+    while True:
+        target_format = input("Target format: ").strip().lower()
+        if target_format in formats:
+            break
+        print(f"Invalid format. Choose from: {', '.join(formats)}")
+    
+    # Prompt for source directory (with auto-discovery option)
+    profile_resolver = ProfilePathResolver()
+    try:
+        default_source = profile_resolver.get_profile_path(source_format)
+        source_prompt = f"Source directory (default: {default_source}): "
+    except ValueError:
+        source_prompt = "Source directory: "
+        default_source = None
+    
+    source_dir_input = input(source_prompt).strip()
+    if not source_dir_input and default_source:
+        source_dir = str(default_source)
+    elif source_dir_input:
+        source_dir = source_dir_input
+    else:
+        print("Error: Source directory is required")
+        return EXIT_ERROR
+    
+    # Validate source directory
+    source_path = Path(source_dir).expanduser()
+    if not source_path.exists():
+        print(f"Warning: Source directory does not exist: {source_path}")
+        response = input("Continue anyway? [y/N]: ").strip().lower()
+        if response not in ['y', 'yes']:
+            print("Aborted.")
+            return EXIT_ERROR
+    
+    # Prompt for target directory (with auto-discovery option)
+    try:
+        default_target = profile_resolver.get_profile_path(target_format)
+        target_prompt = f"Target directory (default: {default_target}): "
+    except ValueError:
+        target_prompt = "Target directory: "
+        default_target = None
+    
+    target_dir_input = input(target_prompt).strip()
+    if not target_dir_input and default_target:
+        target_dir = str(default_target)
+    elif target_dir_input:
+        target_dir = target_dir_input
+    else:
+        print("Error: Target directory is required")
+        return EXIT_ERROR
+    
+    # Create config object
+    config = Config(
+        source_dir=source_dir,
+        target_dir=target_dir,
+        source_format=source_format,
+        target_format=target_format
+    )
+    
+    # Validate config
+    errors = validate_config(config, registry)
+    if errors:
+        print("\nConfiguration validation errors:")
+        for error in errors:
+            print(f"  - {error}")
+        return EXIT_ERROR
+    
+    # Save config
+    try:
+        save_config(config)
+        print()
+        print(f"Configuration saved to {DEFAULT_CONFIG_PATH}")
+        print()
+        print("You can now run 'agent-sync' without arguments to use this configuration.")
+        print("CLI flags will override config values when provided.")
+        return EXIT_SUCCESS
+    except Exception as e:
+        print(f"Error saving configuration: {e}", file=sys.stderr)
+        return EXIT_ERROR
+
+
 def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.ArgumentParser:
     """
     Create argument parser for CLI.
@@ -129,6 +244,12 @@ def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.Argumen
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Initialize configuration file (interactive)
+  %(prog)s init
+
+  # Run sync with config file (no arguments needed)
+  %(prog)s
+
   # Auto-discover profile paths (format-only, directories auto-resolved)
   %(prog)s --source-format claude --target-format copilot
 
@@ -509,21 +630,67 @@ def main(argv: Optional[list] = None):
         argv = sys.argv[1:]
 
     registry = setup_registry()
+    
+    # Handle 'init' subcommand
+    if len(argv) > 0 and argv[0] == 'init':
+        return run_init_command(registry)
+    
+    # Load config file if it exists
+    config = load_config()
+    
     parser = create_parser(registry)
     args = parser.parse_args(argv)
+    
+    # Track which values came from CLI vs config for mutual exclusivity checks
+    cli_source_dir = args.source_dir is not None
+    cli_target_dir = args.target_dir is not None
+    
+    # Merge config with CLI args (CLI args take priority)
+    if config:
+        # Apply config defaults only if not specified via CLI
+        if not args.source_dir and config.source_dir:
+            args.source_dir = Path(config.source_dir)
+        if not args.target_dir and config.target_dir:
+            args.target_dir = Path(config.target_dir)
+        if not args.source_format and config.source_format:
+            args.source_format = config.source_format
+        if not args.target_format and config.target_format:
+            args.target_format = config.target_format
+        if not args.state_file and config.state_file:
+            args.state_file = Path(config.state_file)
+        if not args.dry_run and config.dry_run:
+            args.dry_run = True
+        if not args.verbose and config.verbose:
+            args.verbose = True
+        if not args.force and config.force:
+            args.force = True
+        if not args.strict and config.strict:
+            args.strict = True
+        if not args.yes and config.yes:
+            args.yes = True
+        if not args.only and config.only:
+            args.only = config.only
+        if args.direction == 'both' and config.direction != 'both':
+            args.direction = config.direction
+        if not args.add_argument_hint and config.add_argument_hint:
+            args.add_argument_hint = True
+        if not args.add_handoffs and config.add_handoffs:
+            args.add_handoffs = True
+        if not args.no_autodiscover and config.no_autodiscover:
+            args.no_autodiscover = True
 
     # Route to single-file conversion mode if --convert-file is specified
     if args.convert_file:
-        # Validate mutual exclusivity
-        if args.source_dir:
+        # Validate mutual exclusivity (only check if source_dir was explicitly provided via CLI)
+        if cli_source_dir:
             print("Error: --convert-file and --source-dir are mutually exclusive", file=sys.stderr)
             return EXIT_ERROR
         return convert_single_file(args)
 
     # Route to in-place file sync mode if --sync-file is specified
     if args.sync_file:
-        # Validate mutual exclusivity
-        if args.convert_file or args.source_dir or args.target_dir:
+        # Validate mutual exclusivity (only check if dirs were explicitly provided via CLI)
+        if args.convert_file or cli_source_dir or cli_target_dir:
             print("Error: --sync-file is mutually exclusive with --convert-file and directory sync", file=sys.stderr)
             return EXIT_ERROR
         if not args.target_file:
