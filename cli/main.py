@@ -112,82 +112,8 @@ def _parse_only_types(only_arg: str) -> List[ConfigType]:
     return config_types
 
 
-def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.ArgumentParser:
-    """
-    Create argument parser for CLI.
-
-    Args:
-        registry: Optional FormatRegistry to get dynamic format choices
-
-    Returns:
-        Configured ArgumentParser instance
-    """
-    formats = registry.list_formats() if registry else ['claude', 'copilot', 'gemini']
-
-    parser = argparse.ArgumentParser(
-        description='Universal sync tool for AI coding agent configurations',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Auto-discover profile paths (format-only, directories auto-resolved)
-  %(prog)s --source-format claude --target-format copilot
-
-  # Sync Claude agents to Copilot (auto-detects all config types)
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
-           --source-format claude --target-format copilot
-
-  # Sync only agents (skip permissions and commands)
-  %(prog)s --source-dir ~/.claude --target-dir .github \\
-           --source-format claude --target-format copilot \\
-           --only agents
-
-  # Sync only permissions
-  %(prog)s --source-dir ~/.claude --target-dir .github \\
-           --source-format claude --target-format copilot \\
-           --only permissions
-
-  # Sync only commands
-  %(prog)s --source-dir ~/.gemini/commands --target-dir .github/prompts \\
-           --source-format gemini --target-format copilot \\
-           --only commands
-
-  # Single file conversion (auto-detect source, auto-generate output)
-  %(prog)s --convert-file ~/.claude/agents/planner.md --target-format copilot
-
-  # Single file conversion with explicit output
-  %(prog)s --convert-file agent.md --output agent.agent.md --target-format copilot
-
-  # Bidirectional sync with dry-run
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
-           --source-format claude --target-format copilot \\
-           --direction both --dry-run
-
-  # Sync only agents and commands (skip permissions)
-  %(prog)s --source-dir ~/.claude --target-dir .github \\
-           --source-format claude --target-format copilot \\
-           --only agents,commands
-
-  # Skip confirmation prompts (for CI/scripts)
-  %(prog)s --source-dir ~/.claude/agents --target-dir .github/agents \\
-           --source-format claude --target-format copilot \\
-           --yes
-
-  # Combine --only with --yes for automated multi-type sync
-  %(prog)s --source-dir ~/.claude --target-dir .github \\
-           --source-format claude --target-format copilot \\
-           --only agents,permissions --yes --dry-run
-
-  # Disable auto-discovery (require explicit paths)
-  %(prog)s --source-format claude --target-format copilot --no-autodiscover
-        """
-    )
-
-    parser.add_argument(
-        '--version',
-        action='version',
-        version=f'%(prog)s {VERSION}'
-    )
-
+def _add_sync_arguments(parser: argparse.ArgumentParser, formats: List[str]):
+    """Add sync-related arguments to a parser (shared between sync subcommand and legacy mode)."""
     # Single-file conversion mode
     parser.add_argument(
         '--convert-file',
@@ -319,6 +245,101 @@ Examples:
         action='store_true',
         help='Disable auto-discovery; require explicit --source-dir and --target-dir'
     )
+
+
+def create_parser(registry: Optional[FormatRegistry] = None) -> argparse.ArgumentParser:
+    """
+    Create argument parser for CLI with subcommand support.
+
+    Args:
+        registry: Optional FormatRegistry to get dynamic format choices
+
+    Returns:
+        Configured ArgumentParser instance
+    """
+    formats = registry.list_formats() if registry else ['claude', 'copilot', 'gemini']
+
+    parser = argparse.ArgumentParser(
+        prog='agent-sync',
+        description='Universal sync tool for AI coding agent configurations',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Sync using subcommands (recommended)
+  %(prog)s sync --source-format claude --target-format copilot
+  %(prog)s sync --source-dir ~/.claude --target-dir .github --source-format claude --target-format copilot
+
+  # Legacy flat arguments (deprecated, will be removed in 3.0)
+  %(prog)s --source-format claude --target-format copilot
+  %(prog)s --source-dir ~/.claude --target-dir .github --source-format claude --target-format copilot
+        """
+    )
+
+    parser.add_argument(
+        '--version',
+        action='version',
+        version=f'%(prog)s {VERSION}'
+    )
+
+    # Create subparsers for different commands
+    subparsers = parser.add_subparsers(
+        dest='subcommand',
+        help='Available commands',
+        metavar='COMMAND'
+    )
+
+    # Sync subcommand
+    sync_parser = subparsers.add_parser(
+        'sync',
+        help='Synchronize configurations between formats',
+        description='Run a one-off synchronization between different AI tool formats',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Auto-discover profile paths
+  agent-sync sync --source-format claude --target-format copilot
+  
+  # Sync specific directories
+  agent-sync sync --source-dir ~/.claude --target-dir .github \\
+                  --source-format claude --target-format copilot
+  
+  # Sync only agents
+  agent-sync sync --source-dir ~/.claude --target-dir .github \\
+                  --source-format claude --target-format copilot --only agents
+  
+  # Single file conversion
+  agent-sync sync --convert-file agent.md --target-format copilot
+  
+  # Bidirectional sync with dry-run
+  agent-sync sync --source-dir ~/.claude --target-dir .github \\
+                  --source-format claude --target-format copilot --direction both --dry-run
+        """
+    )
+    _add_sync_arguments(sync_parser, formats)
+
+    # Init subcommand (placeholder for future implementation)
+    init_parser = subparsers.add_parser(
+        'init',
+        help='Initialize agent-sync configuration',
+        description='Setup agent-sync configuration (feature coming soon)'
+    )
+
+    # Watch subcommand (placeholder for future implementation)
+    watch_parser = subparsers.add_parser(
+        'watch',
+        help='Watch and sync changes in real-time',
+        description='Continuously monitor and sync changes (feature coming soon)'
+    )
+
+    # Config subcommand (placeholder for future implementation)
+    config_parser = subparsers.add_parser(
+        'config',
+        help='View or edit agent-sync configuration',
+        description='Manage agent-sync configuration (feature coming soon)'
+    )
+
+    # Add sync arguments to main parser for backward compatibility (legacy mode)
+    _add_sync_arguments(parser, formats)
 
     return parser
 
@@ -497,7 +518,7 @@ def convert_single_file(args) -> int:
 
 def main(argv: Optional[list] = None):
     """
-    Main entry point for CLI.
+    Main entry point for CLI with subcommand support.
 
     Args:
         argv: Command-line arguments (defaults to sys.argv)
@@ -511,6 +532,46 @@ def main(argv: Optional[list] = None):
     registry = setup_registry()
     parser = create_parser(registry)
     args = parser.parse_args(argv)
+
+    # Handle placeholder subcommands
+    if hasattr(args, 'subcommand'):
+        if args.subcommand == 'init':
+            print("The 'init' command is coming soon in a future release.", file=sys.stderr)
+            print("For now, agent-sync works without initialization - just run 'agent-sync sync'.", file=sys.stderr)
+            return EXIT_SUCCESS
+        elif args.subcommand == 'watch':
+            print("The 'watch' command is coming soon in a future release.", file=sys.stderr)
+            print("For now, use 'agent-sync sync' for one-off synchronization.", file=sys.stderr)
+            return EXIT_SUCCESS
+        elif args.subcommand == 'config':
+            print("The 'config' command is coming soon in a future release.", file=sys.stderr)
+            print("For now, configuration is done via command-line flags.", file=sys.stderr)
+            return EXIT_SUCCESS
+
+    # Check if using legacy mode (no subcommand, but sync-related args provided)
+    is_legacy_mode = (
+        args.subcommand is None and
+        (args.convert_file or args.sync_file or args.source_dir or args.source_format or args.target_format)
+    )
+
+    if is_legacy_mode:
+        # Print deprecation warning for legacy mode
+        print(
+            "Warning: Using legacy flat-argument style is deprecated and will be removed in version 3.0.",
+            file=sys.stderr
+        )
+        print(
+            "Please use 'agent-sync sync' subcommand instead. See 'agent-sync sync --help' for details.",
+            file=sys.stderr
+        )
+        print(file=sys.stderr)  # Empty line for readability
+
+    # If no subcommand and no sync arguments, show help
+    if args.subcommand is None and not is_legacy_mode:
+        parser.print_help()
+        return EXIT_SUCCESS
+
+    # From here on, treat both subcommand 'sync' and legacy mode the same way
 
     # Route to single-file conversion mode if --convert-file is specified
     if args.convert_file:

@@ -56,10 +56,10 @@ class TestCLIArgumentParsing:
         ]
 
     def test_required_arguments_present(self):
-        """Verify --source-dir, --target-dir, --source-format, --target-format are required for dir sync."""
-        # No arguments should produce error (validation in main, not parser)
+        """Verify that no arguments shows help (new behavior with subcommands)."""
+        # No arguments should show help and exit successfully
         result = main([])
-        assert result != 0
+        assert result == 0  # Shows help and exits with success
 
     def test_source_dir_argument(self, parser, valid_source_dir, valid_target_dir):
         """Test --source-dir accepts valid path."""
